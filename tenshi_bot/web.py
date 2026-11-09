@@ -2091,6 +2091,10 @@ _PAGE_HTML = """
       radial-gradient(1100px 660px at 8% -12%, rgba(225,29,72,.30), transparent 58%),
       radial-gradient(940px 640px at 106% -2%, rgba(150,20,95,.24), transparent 55%),
       radial-gradient(820px 820px at 50% 122%, rgba(74,12,46,.34), transparent 62%) !important}
+  /* living aurora swirling behind the whole app */
+  body::after{content:"";position:fixed;inset:-40%;z-index:-1;pointer-events:none;opacity:.55;
+    background:conic-gradient(from 0deg at 50% 50%, rgba(225,29,72,.20), rgba(120,20,90,.05), rgba(60,10,44,.18), rgba(244,63,94,.12), rgba(225,29,72,.20));
+    filter:blur(64px);animation:aurora 26s linear infinite}
   header{border-bottom:none;position:sticky;
     background:
       linear-gradient(180deg,rgba(10,7,12,.94),rgba(10,7,12,.55)) padding-box,
