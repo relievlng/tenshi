@@ -1928,7 +1928,7 @@ _PAGE_HTML = """
 
   /* ===== gate / login / no-access screens ===== */
   #gate.gate{position:fixed;inset:0;z-index:40;display:grid;place-items:center;padding:24px;overflow:hidden;
-    background:radial-gradient(1200px 800px at 50% -10%, #28101a, #050508 72%)}
+    background:linear-gradient(150deg,#050507 0%,#0e0e12 46%,#4a4a52 80%,#ededf2 100%)}
   #gate.gate::before{content:"";position:absolute;inset:-30%;z-index:0;pointer-events:none;
     background:
       conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,.22), rgba(130,20,90,.12), rgba(60,10,40,.20), rgba(255,255,255,.22));
@@ -2200,6 +2200,7 @@ _PAGE_HTML = """
   /* ===== GM logo + black↔white gradient backdrop (content keeps its colour) ===== */
   body{background:linear-gradient(150deg,#050507 0%,#0e0e12 46%,#4a4a52 80%,#ededf2 100%) fixed}
   body::before,body::after{display:none}
+  #gate.gate::before,#gate.gate::after{display:none}  /* clean B&W login — no coloured aurora */
   .logo.hasimg{width:66px;height:40px;background:transparent;border:none;box-shadow:none;border-radius:0;overflow:hidden}
   .logo.hasimg::before{display:none}
   .logo.hasimg img{width:100%;height:100%;object-fit:contain}
