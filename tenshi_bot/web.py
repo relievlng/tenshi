@@ -1028,6 +1028,90 @@ async def _h_logo(request):
                             headers={"Cache-Control": "public, max-age=86400"})
 
 
+def _legal_page(title: str, body: str) -> str:
+    return (
+        "<!doctype html><html lang=en><head><meta charset=utf-8>"
+        "<meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>{title} · Gang Manager</title>"
+        "<style>"
+        "body{margin:0;background:#07070a;color:#e9e9ef;"
+        "font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.65}"
+        ".wrap{max-width:760px;margin:0 auto;padding:48px 22px 80px}"
+        "header{display:flex;align-items:center;gap:14px;margin-bottom:8px}"
+        "header img{height:40px;width:auto}"
+        "header b{font-size:20px;letter-spacing:.3px}"
+        "h1{font-size:28px;margin:26px 0 4px}"
+        "h2{font-size:17px;margin:28px 0 6px;color:#c9c9d2}"
+        ".upd{color:#8a8a92;font-size:13px;margin:0 0 8px}"
+        "p,li{color:#c9c9d2;font-size:15px}a{color:#fff}"
+        ".note{margin-top:40px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08);color:#8a8a92;font-size:13px}"
+        "</style></head><body><div class=wrap>"
+        "<header><img src='/gm-logo.png' alt='GM'><b>Gang Manager</b></header>"
+        f"<h1>{title}</h1>{body}"
+        "<div class=note>Gang Manager is a community tool for FiveM roleplay Discord servers. "
+        "Questions? Contact your server's staff or the bot operator in your Discord server.</div>"
+        "</div></body></html>"
+    )
+
+
+_TERMS_BODY = (
+    "<p class=upd>Last updated: 12 November 2026</p>"
+    "<p>By adding or using Gang Manager (the &ldquo;bot&rdquo;) in your Discord server, you agree to these terms.</p>"
+    "<h2>Use of the bot</h2>"
+    "<p>The bot provides roster, KOS, strike, application, ticket and stash management for Discord communities. "
+    "You and your staff are responsible for how it is used, including roles assigned, data entered and actions taken.</p>"
+    "<h2>Acceptable use</h2>"
+    "<p>Do not use the bot to break Discord&rsquo;s Terms of Service or Community Guidelines, to harass others, or for "
+    "anything unlawful. Do not attempt to abuse, overload, reverse-engineer or disrupt the bot.</p>"
+    "<h2>Availability</h2>"
+    "<p>The bot is provided &ldquo;as is&rdquo; and &ldquo;as available&rdquo;, with no guarantee of uptime, accuracy "
+    "or that it is error-free. Features may change or stop at any time.</p>"
+    "<h2>Limitation of liability</h2>"
+    "<p>To the maximum extent permitted by law, the operator is not liable for any loss or damage arising from use of, "
+    "or inability to use, the bot &mdash; including lost or altered data.</p>"
+    "<h2>Privacy</h2>"
+    "<p>Your use of the bot is also covered by our <a href='/privacy'>Privacy Policy</a>.</p>"
+    "<h2>Changes</h2>"
+    "<p>These terms may be updated. Continued use after a change means you accept the updated terms.</p>"
+)
+
+_PRIVACY_BODY = (
+    "<p class=upd>Last updated: 12 November 2026</p>"
+    "<p>This policy explains what Gang Manager (the &ldquo;bot&rdquo;) stores and why.</p>"
+    "<h2>What we collect</h2>"
+    "<ul>"
+    "<li><b>Discord identifiers &amp; names:</b> user, server, role and channel IDs, usernames and display names &mdash; "
+    "needed to show rosters, assign roles, log actions and run the web panel.</li>"
+    "<li><b>Data you enter:</b> roster entries, KOS entries and reasons, strikes and reasons, applications (EOIs) and votes, "
+    "ticket/order details and stash items, entered by staff and members through commands and the web panel.</li>"
+    "<li><b>Website login:</b> when you log in to the web panel we use Discord OAuth2 (the &ldquo;identify&rdquo; scope) to "
+    "confirm who you are and which servers you can manage, and store a signed session cookie. We never receive your password.</li>"
+    "<li><b>Join/leave events (optional):</b> if the Server Members Intent is enabled, joins and leaves are logged "
+    "(user, account age, member count).</li>"
+    "</ul>"
+    "<h2>What we do not collect</h2>"
+    "<p>We do not read your message content &mdash; the bot works through slash commands and buttons. "
+    "We do not sell or share your data with advertisers or other third parties.</p>"
+    "<h2>Where it is stored</h2>"
+    "<p>Data is stored in the bot&rsquo;s data file on its host. Access is limited to the bot operator and your server&rsquo;s staff.</p>"
+    "<h2>Retention &amp; deletion</h2>"
+    "<p>Data is kept while the bot is in your server. To remove your data, ask a server administrator to take you off the "
+    "roster and lists, or ask the bot operator to delete the server&rsquo;s data. Removing the bot from a server stops new collection.</p>"
+    "<h2>Third parties</h2>"
+    "<p>The bot runs on Discord, which is governed by <a href='https://discord.com/privacy'>Discord&rsquo;s Privacy Policy</a>.</p>"
+    "<h2>Changes</h2>"
+    "<p>We may update this policy; the &ldquo;last updated&rdquo; date will change.</p>"
+)
+
+
+async def _h_terms(request):
+    return _aioweb.Response(text=_legal_page("Terms of Service", _TERMS_BODY), content_type="text/html")
+
+
+async def _h_privacy(request):
+    return _aioweb.Response(text=_legal_page("Privacy Policy", _PRIVACY_BODY), content_type="text/html")
+
+
 def _brand_info() -> dict:
     """Primary server's name + icon, for branding the page (public info)."""
     g = bot.guilds[0] if getattr(bot, "guilds", None) else None
@@ -1812,6 +1896,8 @@ async def start_web_server() -> None:
         [
             _aioweb.get("/", _h_index),
             _aioweb.get("/gm-logo.png", _h_logo),
+            _aioweb.get("/terms", _h_terms),
+            _aioweb.get("/privacy", _h_privacy),
             _aioweb.get("/login", _h_login),
             _aioweb.get("/callback", _h_callback),
             _aioweb.get("/logout", _h_logout),
