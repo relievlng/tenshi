@@ -2197,8 +2197,9 @@ _PAGE_HTML = """
   .otable td b{color:var(--text);font-weight:600}
   @media(max-width:560px){.osum-tiles{grid-template-columns:repeat(2,1fr)}}
 
-  /* ===== black & white theme + GM logo ===== */
-  html{filter:grayscale(1)}
+  /* ===== GM logo + black↔white gradient backdrop (content keeps its colour) ===== */
+  body{background:linear-gradient(150deg,#050507 0%,#0e0e12 46%,#4a4a52 80%,#ededf2 100%) fixed}
+  body::before,body::after{display:none}
   .logo.hasimg{width:66px;height:40px;background:transparent;border:none;box-shadow:none;border-radius:0;overflow:hidden}
   .logo.hasimg::before{display:none}
   .logo.hasimg img{width:100%;height:100%;object-fit:contain}
