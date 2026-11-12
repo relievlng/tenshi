@@ -1858,7 +1858,7 @@ _DENIED_HTML = (
     "<div><h2>🚫 No access</h2>"
     "<p style='color:#9a9aa6'>Your Discord account doesn't have the website-access role.<br>"
     "Ask leadership for the role set in <code>/settings role → Website access role</code>.</p>"
-    "<p><a style='color:#e11d48' href='/logout'>Log out</a></p></div></body>"
+    "<p><a style='color:#9a9aa8' href='/logout'>Log out</a></p></div></body>"
 )
 
 
@@ -1879,7 +1879,7 @@ _PAGE_HTML = """
 <style>
   :root{
     --bg:#07070a; --card:rgba(20,20,26,.72); --cardsolid:#15151b; --line:rgba(255,255,255,.07);
-    --text:#f2f2f6; --mute:#9a9aa8; --brand:#e11d48; --brand2:#f43f5e;
+    --text:#f2f2f6; --mute:#9a9aa8; --brand:#9a9aa8; --brand2:#c9c9d2;
     --ok:#22c55e; --bad:#ef4444; --warn:#f59e0b; --blue:#60a5fa; --purple:#a78bfa; --r:18px;
   }
   *{box-sizing:border-box}
@@ -1889,41 +1889,41 @@ _PAGE_HTML = """
     -webkit-font-smoothing:antialiased}
   body::before{content:"";position:fixed;inset:-20%;z-index:-1;pointer-events:none;
     background:
-      radial-gradient(900px 520px at 12% -8%, rgba(225,29,72,.22), transparent 60%),
+      radial-gradient(900px 520px at 12% -8%, rgba(255,255,255,.22), transparent 60%),
       radial-gradient(760px 520px at 102% 2%, rgba(130,20,70,.20), transparent 55%),
       radial-gradient(640px 640px at 50% 118%, rgba(60,10,36,.28), transparent 62%);
     animation:drift 20s ease-in-out infinite alternate}
   @keyframes drift{to{transform:translate3d(0,-14px,0) scale(1.04)}}
   a{text-decoration:none;color:inherit}
-  ::selection{background:rgba(225,29,72,.35)}
+  ::selection{background:rgba(255,255,255,.35)}
 
   header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;
     padding:16px 22px;border-bottom:1px solid var(--line);
     background:linear-gradient(180deg,rgba(7,7,10,.92),rgba(7,7,10,.72));backdrop-filter:blur(12px)}
   .logo{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:18px;overflow:hidden;
-    background:linear-gradient(135deg,#2a0b16,#4c0f22);border:1px solid rgba(244,63,94,.4);
-    box-shadow:0 0 22px rgba(225,29,72,.45)}
+    background:linear-gradient(135deg,#2a0b16,#4c0f22);border:1px solid rgba(255,255,255,.4);
+    box-shadow:0 0 22px rgba(255,255,255,.45)}
   .logo.hasimg{background:#0d0d12}
   .logo img{width:100%;height:100%;object-fit:cover;display:block}
   .brand{font-family:"Space Grotesk",sans-serif;font-size:19px;font-weight:700;letter-spacing:.5px;
-    background:linear-gradient(90deg,#fff,#ffb3c1);-webkit-background-clip:text;background-clip:text;color:transparent;flex:1}
+    background:linear-gradient(90deg,#fff,#e8e8ee);-webkit-background-clip:text;background-clip:text;color:transparent;flex:1}
   .brand small{font-family:"Inter";font-weight:500;font-size:12px;color:var(--mute);letter-spacing:0;display:block;margin-top:-2px}
 
   .wrap{max-width:900px;margin:0 auto;padding:20px 18px 60px}
   button{font:inherit;cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.04);
     color:var(--text);padding:9px 14px;border-radius:11px;transition:.16s ease}
-  button:hover{border-color:rgba(244,63,94,.55);background:rgba(244,63,94,.1);transform:translateY(-1px)}
+  button:hover{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.1);transform:translateY(-1px)}
   button:active{transform:translateY(0)}
   button:disabled{opacity:.5;cursor:default;transform:none}
-  button.brand-btn{background:linear-gradient(135deg,var(--brand),#be123c);border-color:transparent;
-    color:#fff;font-weight:700;box-shadow:0 8px 24px rgba(225,29,72,.35)}
+  button.brand-btn{background:linear-gradient(135deg,var(--brand),#3a3a42);border-color:transparent;
+    color:#fff;font-weight:700;box-shadow:0 8px 24px rgba(255,255,255,.35)}
   button.ghost{background:transparent}
   button.danger{border-color:rgba(239,68,68,.3);color:#ffb0b0;background:transparent}
   button.danger:hover{background:var(--bad);border-color:var(--bad);color:#fff}
   input[type=text],input[type=number],input:not([type]),select{font:inherit;background:rgba(255,255,255,.04);
     border:1px solid var(--line);color:var(--text);padding:11px 14px;border-radius:12px;outline:none;transition:.16s}
   .cand input,.addbar input{padding:9px 12px}
-  input:focus,select:focus{border-color:rgba(244,63,94,.55);background:rgba(244,63,94,.06)}
+  input:focus,select:focus{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.06)}
   .muted{color:var(--mute)}
 
   /* ===== gate / login / no-access screens ===== */
@@ -1931,11 +1931,11 @@ _PAGE_HTML = """
     background:radial-gradient(1200px 800px at 50% -10%, #28101a, #050508 72%)}
   #gate.gate::before{content:"";position:absolute;inset:-30%;z-index:0;pointer-events:none;
     background:
-      conic-gradient(from 0deg at 50% 50%, rgba(225,29,72,.22), rgba(130,20,90,.12), rgba(60,10,40,.20), rgba(225,29,72,.22));
+      conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,.22), rgba(130,20,90,.12), rgba(60,10,40,.20), rgba(255,255,255,.22));
     filter:blur(40px);animation:aurora 16s linear infinite}
   #gate.gate::after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.5;
     background:
-      radial-gradient(420px 420px at 18% 22%, rgba(244,63,94,.28), transparent 60%),
+      radial-gradient(420px 420px at 18% 22%, rgba(255,255,255,.28), transparent 60%),
       radial-gradient(520px 520px at 84% 78%, rgba(120,20,80,.26), transparent 60%);
     animation:orbfloat 9s ease-in-out infinite alternate}
   @keyframes aurora{to{transform:rotate(360deg)}}
@@ -1943,30 +1943,30 @@ _PAGE_HTML = """
   .gatecard{position:relative;z-index:1;max-width:440px;width:100%;text-align:center;padding:44px 34px 36px;
     border-radius:28px;background:linear-gradient(180deg,rgba(26,16,22,.86),rgba(12,12,17,.9));
     border:1px solid rgba(255,255,255,.08);backdrop-filter:blur(22px) saturate(1.2);
-    box-shadow:0 40px 120px rgba(0,0,0,.7),0 0 0 1px rgba(244,63,94,.08) inset;
+    box-shadow:0 40px 120px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.08) inset;
     animation:gatepop .55s cubic-bezier(.2,.9,.25,1.3) both}
   .gatecard::before{content:"";position:absolute;inset:-1px;border-radius:29px;padding:1px;pointer-events:none;
-    background:linear-gradient(135deg,rgba(244,63,94,.65),transparent 40%,transparent 60%,rgba(244,63,94,.5));
+    background:linear-gradient(135deg,rgba(255,255,255,.65),transparent 40%,transparent 60%,rgba(255,255,255,.5));
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
     -webkit-mask-composite:xor;mask-composite:exclude;opacity:.8;animation:bordshift 6s ease-in-out infinite alternate}
   @keyframes gatepop{from{opacity:0;transform:translateY(22px) scale(.94)}to{opacity:1;transform:none}}
   @keyframes bordshift{to{filter:hue-rotate(-18deg)}}
   .gate .gicon{position:relative;width:96px;height:96px;margin:0 auto 22px;border-radius:50%;display:grid;place-items:center;
     font-size:44px;background:linear-gradient(135deg,#2a0b16,#4c0f22);
-    box-shadow:0 0 50px rgba(225,29,72,.55),0 10px 30px rgba(0,0,0,.5);animation:iconfloat 4.5s ease-in-out infinite}
+    box-shadow:0 0 50px rgba(255,255,255,.55),0 10px 30px rgba(0,0,0,.5);animation:iconfloat 4.5s ease-in-out infinite}
   .gate .gicon::before{content:"";position:absolute;inset:-7px;border-radius:50%;z-index:-1;
-    background:conic-gradient(from 0deg,#e11d48,#f43f5e,#be123c,#e11d48);filter:blur(7px);opacity:.85;
+    background:conic-gradient(from 0deg,#9a9aa8,#c9c9d2,#3a3a42,#9a9aa8);filter:blur(7px);opacity:.85;
     animation:ringspin 4s linear infinite}
   .gate .gicon .glogo{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;
     border:2px solid rgba(255,255,255,.12)}
   .gate .gicon .gemoji{line-height:1}
   .gate .gicon .gbadge{position:absolute;right:-4px;bottom:-4px;width:34px;height:34px;border-radius:50%;
-    display:grid;place-items:center;font-size:18px;background:#15151b;border:2px solid rgba(244,63,94,.5);
+    display:grid;place-items:center;font-size:18px;background:#15151b;border:2px solid rgba(255,255,255,.5);
     box-shadow:0 4px 14px rgba(0,0,0,.5)}
   @keyframes iconfloat{50%{transform:translateY(-8px)}}
   @keyframes ringspin{to{transform:rotate(360deg)}}
   .gatecard h2{margin:0 0 10px;font-family:"Space Grotesk",sans-serif;font-size:27px;font-weight:800;letter-spacing:.3px;
-    background:linear-gradient(90deg,#fff,#ffb3c1);-webkit-background-clip:text;background-clip:text;color:transparent}
+    background:linear-gradient(90deg,#fff,#e8e8ee);-webkit-background-clip:text;background-clip:text;color:transparent}
   .gatecard p{margin:0 auto;max-width:330px;color:var(--mute);line-height:1.65;font-size:14.5px}
   #gateActions{margin-top:26px}
   #gateActions button{width:100%;padding:14px;font-size:15px;border-radius:14px}
@@ -1980,12 +1980,12 @@ _PAGE_HTML = """
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:12px;margin:4px 0 20px}
   .stat{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:16px;
     padding:14px 16px;backdrop-filter:blur(10px);transition:.2s;animation:rise .5s both}
-  .stat:hover{transform:translateY(-3px);border-color:rgba(244,63,94,.4)}
+  .stat:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.4)}
   .stat .n{font-size:26px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
   .stat .l{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.7px;margin-top:6px;font-weight:600}
   .stat .ic{position:absolute;right:10px;top:9px;font-size:16px;opacity:.5}
   .stat::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--brand);opacity:.8}
-  .stat.brand .n{color:#ff7a93} .stat.brand::after{background:var(--brand)}
+  .stat.brand .n{color:#e2e2e8} .stat.brand::after{background:var(--brand)}
   .stat.bad .n{color:#ff8a8a} .stat.bad::after{background:var(--bad)}
   .stat.warn .n{color:#ffcf6b} .stat.warn::after{background:var(--warn)}
   .stat.ok .n{color:#86efac} .stat.ok::after{background:var(--ok)}
@@ -1997,15 +1997,15 @@ _PAGE_HTML = """
   .tabs{display:inline-flex;gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,.04);
     border:1px solid var(--line);margin-bottom:16px}
   .tab{padding:8px 18px;border-radius:10px;cursor:pointer;color:var(--mute);font-weight:600;transition:.18s}
-  .tab.active{background:linear-gradient(135deg,var(--brand),#be123c);color:#fff;box-shadow:0 6px 18px rgba(225,29,72,.4)}
+  .tab.active{background:linear-gradient(135deg,var(--brand),#3a3a42);color:#fff;box-shadow:0 6px 18px rgba(255,255,255,.4)}
 
   .toolbar{display:flex;gap:10px;margin-bottom:16px;align-items:center}
   .toolbar input{flex:1}
   .count{font-size:13px;color:var(--mute);margin-left:auto;white-space:nowrap}
 
   .ranklabel{display:flex;align-items:center;gap:10px;margin:22px 2px 10px;font-weight:700;font-size:12px;
-    text-transform:uppercase;letter-spacing:1px;color:#ffb3c1}
-  .ranklabel::before{content:"";width:3px;height:15px;border-radius:3px;background:linear-gradient(var(--brand),#be123c)}
+    text-transform:uppercase;letter-spacing:1px;color:#e8e8ee}
+  .ranklabel::before{content:"";width:3px;height:15px;border-radius:3px;background:linear-gradient(var(--brand),#3a3a42)}
   .ranklabel .pill{margin-left:auto;background:rgba(255,255,255,.05);border:1px solid var(--line);
     border-radius:999px;padding:2px 10px;font-size:11px;color:var(--mute)}
 
@@ -2036,16 +2036,16 @@ _PAGE_HTML = """
   ul.members{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
   li.member{display:flex;align-items:center;gap:13px;background:var(--card);border:1px solid var(--line);
     border-radius:15px;padding:12px 14px;backdrop-filter:blur(8px);transition:.18s;animation:rise .4s both}
-  li.member:hover{border-color:rgba(244,63,94,.35);background:rgba(255,255,255,.04)}
+  li.member:hover{border-color:rgba(255,255,255,.35);background:rgba(255,255,255,.04)}
   li.member .av{width:44px;height:44px;border-radius:50%;flex:none;padding:2px;
-    background:linear-gradient(135deg,var(--brand),#7c1d3a)}
+    background:linear-gradient(135deg,var(--brand),#2c2c33)}
   li.member .av img{width:100%;height:100%;border-radius:50%;object-fit:cover;background:#000;display:block}
   li.member .av.skull{display:grid;place-items:center;font-size:20px;background:linear-gradient(135deg,#3a0f0f,#5c1212)}
   .mname{font-weight:700;font-size:15px}
   .grow{flex:1;min-width:0}
   .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px;align-items:center}
   .chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;
-    background:rgba(225,29,72,.12);border:1px solid rgba(244,63,94,.28);color:#ffb3c1;transition:.15s}
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);color:#e8e8ee;transition:.15s}
   .chip.rankrole{background:rgba(96,165,250,.12);border-color:rgba(96,165,250,.3);color:#bcd4ff}
   .chip .x{cursor:pointer;opacity:0;width:0;overflow:hidden;transition:.15s;font-weight:800}
   li.member:hover .chip .x{opacity:.75;width:11px;margin-left:1px}
@@ -2084,7 +2084,7 @@ _PAGE_HTML = """
     background:rgba(255,255,255,.05);border:1px solid var(--line);font-size:18px}
   .drop{border:2px dashed var(--line);border-radius:16px;padding:22px;text-align:center;cursor:pointer;
     transition:.18s;background:rgba(255,255,255,.02);margin-bottom:14px}
-  .drop:hover,.drop.over{border-color:rgba(244,63,94,.6);background:rgba(244,63,94,.07)}
+  .drop:hover,.drop.over{border-color:rgba(255,255,255,.6);background:rgba(255,255,255,.07)}
   .drop b{font-size:15px}
   .cand{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
   .cand .ci{flex:1}.cand .cq{width:78px}
@@ -2103,47 +2103,47 @@ _PAGE_HTML = """
   /* ===== premium pass: gate-grade styling across the whole panel ===== */
   body::before{
     background:
-      radial-gradient(1100px 660px at 8% -12%, rgba(225,29,72,.30), transparent 58%),
+      radial-gradient(1100px 660px at 8% -12%, rgba(255,255,255,.30), transparent 58%),
       radial-gradient(940px 640px at 106% -2%, rgba(150,20,95,.24), transparent 55%),
       radial-gradient(820px 820px at 50% 122%, rgba(74,12,46,.34), transparent 62%) !important}
   /* living aurora swirling behind the whole app */
   body::after{content:"";position:fixed;inset:-40%;z-index:-1;pointer-events:none;opacity:.55;
-    background:conic-gradient(from 0deg at 50% 50%, rgba(225,29,72,.20), rgba(120,20,90,.05), rgba(60,10,44,.18), rgba(244,63,94,.12), rgba(225,29,72,.20));
+    background:conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,.20), rgba(120,20,90,.05), rgba(60,10,44,.18), rgba(255,255,255,.12), rgba(255,255,255,.20));
     filter:blur(64px);animation:aurora 26s linear infinite}
   header{border-bottom:none;position:sticky;
     background:
       linear-gradient(180deg,rgba(10,7,12,.94),rgba(10,7,12,.55)) padding-box,
-      linear-gradient(90deg,transparent,rgba(244,63,94,.6),transparent) border-box;
+      linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent) border-box;
     border-bottom:1px solid transparent;backdrop-filter:blur(14px) saturate(1.1)}
   .logo{position:relative;z-index:1}
   .logo::before{content:"";position:absolute;inset:-4px;border-radius:14px;z-index:-1;
-    background:conic-gradient(from 0deg,#e11d48,#f43f5e,#be123c,#e11d48);filter:blur(7px);opacity:.75;
+    background:conic-gradient(from 0deg,#9a9aa8,#c9c9d2,#3a3a42,#9a9aa8);filter:blur(7px);opacity:.75;
     animation:ringspin 5s linear infinite}
   @keyframes ringspin{to{transform:rotate(360deg)}}
-  .brand{text-shadow:0 0 30px rgba(244,63,94,.25)}
+  .brand{text-shadow:0 0 30px rgba(255,255,255,.25)}
 
-  .stat{border:1px solid rgba(244,63,94,.16);
+  .stat{border:1px solid rgba(255,255,255,.16);
     background:linear-gradient(180deg,rgba(28,17,23,.72),rgba(14,14,19,.72));
     box-shadow:0 10px 34px rgba(0,0,0,.45)}
   .stat::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;
-    background:radial-gradient(150px 90px at 86% -10%, rgba(244,63,94,.16), transparent 70%)}
+    background:radial-gradient(150px 90px at 86% -10%, rgba(255,255,255,.16), transparent 70%)}
   .stat>*{position:relative;z-index:1}
-  .stat:hover{transform:translateY(-4px) scale(1.015);border-color:rgba(244,63,94,.5);
-    box-shadow:0 20px 48px rgba(225,29,72,.22)}
-  .stat .n{text-shadow:0 0 24px rgba(244,63,94,.3)}
+  .stat:hover{transform:translateY(-4px) scale(1.015);border-color:rgba(255,255,255,.5);
+    box-shadow:0 20px 48px rgba(255,255,255,.22)}
+  .stat .n{text-shadow:0 0 24px rgba(255,255,255,.3)}
 
   .tabs{background:linear-gradient(180deg,rgba(28,17,23,.6),rgba(14,14,19,.6));
     border:1px solid rgba(255,255,255,.08);box-shadow:0 10px 30px rgba(0,0,0,.4)}
-  .tab:hover{color:#ffd9e1}
+  .tab:hover{color:#ffffff}
   .tab.active{animation:tabglow 2.6s ease-in-out infinite}
-  @keyframes tabglow{50%{box-shadow:0 8px 28px rgba(225,29,72,.7)}}
+  @keyframes tabglow{50%{box-shadow:0 8px 28px rgba(255,255,255,.7)}}
 
   li.member,.warcard,.sitem{box-shadow:0 8px 26px rgba(0,0,0,.35)}
-  li.member:hover,.warcard:hover,.sitem:hover{box-shadow:0 16px 42px rgba(225,29,72,.16)}
-  button.brand-btn{box-shadow:0 12px 30px rgba(225,29,72,.42)}
-  .toolbar input:focus,#search:focus{outline:none;border-color:rgba(244,63,94,.5);
-    box-shadow:0 0 0 3px rgba(225,29,72,.14)}
-  .ranklabel{color:#ff9db0}
+  li.member:hover,.warcard:hover,.sitem:hover{box-shadow:0 16px 42px rgba(255,255,255,.16)}
+  button.brand-btn{box-shadow:0 12px 30px rgba(255,255,255,.42)}
+  .toolbar input:focus,#search:focus{outline:none;border-color:rgba(255,255,255,.5);
+    box-shadow:0 0 0 3px rgba(255,255,255,.14)}
+  .ranklabel{color:#c9c9d2}
 
   /* ===== orders / tickets tab ===== */
   .obar{margin:2px 0 14px}
@@ -2173,8 +2173,8 @@ _PAGE_HTML = """
   .oform select,.oform input,.oform textarea{width:100%;padding:11px 13px;border-radius:12px;
     background:rgba(0,0,0,.3);border:1px solid var(--line);color:var(--text);font:inherit;font-size:14px}
   .oform textarea{resize:vertical}
-  .oform select:focus,.oform input:focus,.oform textarea:focus{outline:none;border-color:rgba(244,63,94,.5);
-    box-shadow:0 0 0 3px rgba(225,29,72,.14)}
+  .oform select:focus,.oform input:focus,.oform textarea:focus{outline:none;border-color:rgba(255,255,255,.5);
+    box-shadow:0 0 0 3px rgba(255,255,255,.14)}
   .tlist{display:flex;flex-direction:column;gap:6px}
   .trow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border-radius:10px;
     background:rgba(0,0,0,.25);border:1px solid var(--line);font-size:14px}
@@ -2185,8 +2185,8 @@ _PAGE_HTML = """
   .osum-h{font-weight:700}
   .osum-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
   .osum-tiles>div{background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-  .osum-tiles b{display:block;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:#ff9db0;
-    text-shadow:0 0 20px rgba(244,63,94,.3)}
+  .osum-tiles b{display:block;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:#c9c9d2;
+    text-shadow:0 0 20px rgba(255,255,255,.3)}
   .osum-tiles span{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mute)}
   .otwrap{overflow-x:auto}
   .otable{width:100%;border-collapse:collapse;font-size:13.5px}
