@@ -240,7 +240,7 @@ def _brand(
     existing = embed.footer.text if embed.footer and embed.footer.text else None
     text = footer or existing
     text = f"{text} · {guild.name}" if text else guild.name
-    text = f"{text} · made by pmxl"
+    text = f"{text} · made by winks fat"
     if guild.icon:
         embed.set_footer(text=text[:2048], icon_url=guild.icon.url)
     else:

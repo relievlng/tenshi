@@ -2259,7 +2259,7 @@ _PAGE_HTML = """
   <div id="ordersView" style="display:none"></div>
 </div>
 
-<footer>Only people with the website-access role can open this · changes apply to Discord live · made by pmxl</footer>
+<footer>Only people with the website-access role can open this · changes apply to Discord live · made by winks fat</footer>
 
 <script>
 let STATE={members:[],ranks:[],kos:[],guild:""},TAB="roster";
