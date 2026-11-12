@@ -64,10 +64,6 @@ async def on_ready() -> None:
     bot.add_view(WarPanelView())
     bot.add_view(HelpView())
     bot.add_dynamic_items(VouchDecisionButton)
-    try:
-        await bot.change_presence(activity=discord.CustomActivity(name="made by pmxl"))
-    except discord.DiscordException:
-        pass
     if not ticket_autoclose_loop.is_running():
         ticket_autoclose_loop.start()
     if not eoi_timer_loop.is_running():
