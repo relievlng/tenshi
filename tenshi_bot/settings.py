@@ -248,7 +248,7 @@ async def settings_logs_setup(interaction: discord.Interaction) -> None:
     store = guild_store(DATA, interaction.guild_id)
 
     # find or create a private Logs category (staff-only)
-    cat = discord.utils.get(guild.categories, name="📋 Tenshi Logs")
+    cat = discord.utils.get(guild.categories, name="📋 Gang Manager Logs")
     if cat is None:
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -259,7 +259,7 @@ async def settings_logs_setup(interaction: discord.Interaction) -> None:
             overwrites[lead] = discord.PermissionOverwrite(view_channel=True)
         try:
             cat = await guild.create_category(
-                "📋 Tenshi Logs", overwrites=overwrites, reason="Log channels setup"
+                "📋 Gang Manager Logs", overwrites=overwrites, reason="Log channels setup"
             )
         except discord.HTTPException:
             cat = None
@@ -283,7 +283,7 @@ async def settings_logs_setup(interaction: discord.Interaction) -> None:
     save_data(DATA)
 
     desc = f"Created **{len(created)}** log channel(s)" + (
-        " under **📋 Tenshi Logs**:" if cat is not None else ":"
+        " under **📋 Gang Manager Logs**:" if cat is not None else ":"
     )
     desc += "\n" + ("\n".join(created) if created else "—")
     if kept:

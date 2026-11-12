@@ -1025,7 +1025,7 @@ def _brand_info() -> dict:
                 icon = str(ic.url)
             except Exception:
                 icon = ""
-    return {"name": g.name if g is not None else "Tenshi Admin", "icon": icon}
+    return {"name": g.name if g is not None else "Gang Manager", "icon": icon}
 
 
 async def _h_me(request):
@@ -1857,7 +1857,7 @@ _PAGE_HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tenshi Admin</title>
+<title>Gang Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
@@ -2186,7 +2186,7 @@ _PAGE_HTML = """
 <body>
 <header>
   <div class="logo" id="brandLogo">🐉</div>
-  <div class="brand">TENSHI ADMIN<small id="sub">Admin Panel</small></div>
+  <div class="brand">GANG MANAGER<small id="sub">Admin Panel</small></div>
   <a id="logoutBtn" href="/logout" style="display:none"><button class="ghost">Log out</button></a>
 </header>
 
@@ -2232,7 +2232,7 @@ _PAGE_HTML = """
   <div id="ordersView" style="display:none"></div>
 </div>
 
-<footer>Only people with the website-access role can open this · changes apply to Discord live · 天使</footer>
+<footer>Only people with the website-access role can open this · changes apply to Discord live · made by pmxl</footer>
 
 <script>
 let STATE={members:[],ranks:[],kos:[],guild:""},TAB="roster";
@@ -2251,12 +2251,12 @@ async function api(path,opts){
   return d;
 }
 const DSVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.5c1.7.4 3.1 1 4.3 1.6a13 13 0 0 0-11 0C9.6 4.4 11 3.9 12.6 3.5L12.4 3a19.8 19.8 0 0 0-5 1.4C4 8.3 3.2 12.1 3.5 15.8a19.9 19.9 0 0 0 6 3l.8-1.1c-.7-.3-1.4-.6-2-1l.5-.4a14.2 14.2 0 0 0 12 0l.5.4c-.6.4-1.3.7-2 1l.8 1.1a19.9 19.9 0 0 0 6-3c.4-4.3-.7-8.1-3.5-11.4ZM9.3 13.8c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm5.4 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z"/></svg>';
-var BRAND={name:"Tenshi Admin",icon:""};
+var BRAND={name:"Gang Manager",icon:""};
 function applyBrand(b){
   if(!b)return; BRAND=b;
   const hl=$("brandLogo");
   if(hl){ hl.innerHTML=BRAND.icon?`<img src="${h(BRAND.icon)}" alt="">`:"🐉"; hl.classList.toggle("hasimg",!!BRAND.icon); }
-  try{document.title=(BRAND.name||"Tenshi")+" · Admin";}catch(e){}
+  try{document.title=(BRAND.name||"Gang Manager")+" · Admin";}catch(e){}
 }
 function gate(icon,title,text,actions){
   show("app",false);show("gate",true);$("logoutBtn").style.display="none";
@@ -2271,7 +2271,7 @@ async function boot(){
   if(!me.authed){
     if(me.reason==="not_configured") gate("⚙️","Setup needed","The owner still needs to set DISCORD_CLIENT_SECRET and a Website access role before anyone can log in.");
     else if(me.reason==="no_access") gate("🚫","No access","You don't have the website-access role yet. Ask leadership to give it to you, then reload this page.",'<a href="/logout"><button>Log out</button></a>');
-    else gate("","Tenshi Admin","Log in with Discord to manage the roster, stash, KOS, strikes and more.",'<a href="/login"><button class="discordbtn">'+DSVG+' Log in with Discord</button></a>');
+    else gate("","Gang Manager","Log in with Discord to manage the roster, stash, KOS, strikes and more.",'<a href="/login"><button class="discordbtn">'+DSVG+' Log in with Discord</button></a>');
     return;
   }
   show("gate",false);show("app",true);$("logoutBtn").style.display="";

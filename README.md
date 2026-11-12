@@ -67,7 +67,7 @@ All channel/role settings live in `/settings`. Staff commands need the leadershi
 | `/settings view` | Setup progress bar, ✅/⬜ for every setting, and a 🩺 health check (can't post somewhere, role above Tenshi, key channel missing) | Leadership |
 | `/settings channel` / `/settings role` | Set one channel or role setting from a short emoji list (leave empty to clear) | Leadership (leadership role: admin) |
 | `/settings logs #channel` | Send every log type to one channel in one go | Leadership |
-| `/settings logs_setup` | Auto-create a **📋 Tenshi Logs** category with a channel for every log type (general, roster, KOS, recruitment, roles, joins, tickets, orders, website) and wire up all the settings. Re-run any time to re-create missing ones | Leadership |
+| `/settings logs_setup` | Auto-create a **📋 Gang Manager Logs** category with a channel for every log type (general, roster, KOS, recruitment, roles, joins, tickets, orders, website) and wire up all the settings. Re-run any time to re-create missing ones | Leadership |
 | `/gang_help` | List all commands | Everyone |
 
 ## Code layout

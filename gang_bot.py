@@ -1,5 +1,5 @@
 """
-Tenshi — FiveM gang management bot (entrypoint).
+Gang Manager — FiveM gang management bot (entrypoint).
 
 Run with `python gang_bot.py`. Features live in the tenshi_bot package:
   tenshi_bot/core.py — Config, data store, the bot object, shared helpers (logging, branding, V2 cards), EOI + role-menu views and command groups.
