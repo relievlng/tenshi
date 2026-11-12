@@ -19,6 +19,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import re
 import secrets
 import time
@@ -1014,6 +1015,19 @@ async def _h_index(request):
     return _aioweb.Response(text=_PAGE_HTML, content_type="text/html")
 
 
+_LOGO_PATH = os.path.join(os.path.dirname(__file__), "gm-logo.png")
+
+
+async def _h_logo(request):
+    try:
+        with open(_LOGO_PATH, "rb") as f:
+            data = f.read()
+    except OSError:
+        return _aioweb.Response(status=404)
+    return _aioweb.Response(body=data, content_type="image/png",
+                            headers={"Cache-Control": "public, max-age=86400"})
+
+
 def _brand_info() -> dict:
     """Primary server's name + icon, for branding the page (public info)."""
     g = bot.guilds[0] if getattr(bot, "guilds", None) else None
@@ -1797,6 +1811,7 @@ async def start_web_server() -> None:
     app.add_routes(
         [
             _aioweb.get("/", _h_index),
+            _aioweb.get("/gm-logo.png", _h_logo),
             _aioweb.get("/login", _h_login),
             _aioweb.get("/callback", _h_callback),
             _aioweb.get("/logout", _h_logout),
@@ -2181,6 +2196,16 @@ _PAGE_HTML = """
   .otable tbody tr:last-child td{border-bottom:none}
   .otable td b{color:var(--text);font-weight:600}
   @media(max-width:560px){.osum-tiles{grid-template-columns:repeat(2,1fr)}}
+
+  /* ===== black & white theme + GM logo ===== */
+  html{filter:grayscale(1)}
+  .logo.hasimg{width:66px;height:40px;background:transparent;border:none;box-shadow:none;border-radius:0;overflow:hidden}
+  .logo.hasimg::before{display:none}
+  .logo.hasimg img{width:100%;height:100%;object-fit:contain}
+  .gate .gicon{width:auto;max-width:74%;height:auto;border-radius:16px;background:transparent;box-shadow:none;animation:iconfloat 4.5s ease-in-out infinite}
+  .gate .gicon::before{display:none}
+  .gate .gicon .glogo{width:auto;max-width:260px;height:auto;border-radius:10px;object-fit:contain;border:none;filter:drop-shadow(0 8px 30px rgba(255,255,255,.18))}
+  .gate .gicon .gbadge{right:-6px;bottom:-6px}
 </style>
 </head>
 <body>
@@ -2251,11 +2276,13 @@ async function api(path,opts){
   return d;
 }
 const DSVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="flex:none"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.2.5c1.7.4 3.1 1 4.3 1.6a13 13 0 0 0-11 0C9.6 4.4 11 3.9 12.6 3.5L12.4 3a19.8 19.8 0 0 0-5 1.4C4 8.3 3.2 12.1 3.5 15.8a19.9 19.9 0 0 0 6 3l.8-1.1c-.7-.3-1.4-.6-2-1l.5-.4a14.2 14.2 0 0 0 12 0l.5.4c-.6.4-1.3.7-2 1l.8 1.1a19.9 19.9 0 0 0 6-3c.4-4.3-.7-8.1-3.5-11.4ZM9.3 13.8c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm5.4 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z"/></svg>';
-var BRAND={name:"Gang Manager",icon:""};
+var GM_LOGO="/gm-logo.png";
+var BRAND={name:"Gang Manager",icon:GM_LOGO};
 function applyBrand(b){
-  if(!b)return; BRAND=b;
+  // always the GM logo, whatever the server icon is
+  BRAND={name:(b&&b.name)||"Gang Manager",icon:GM_LOGO};
   const hl=$("brandLogo");
-  if(hl){ hl.innerHTML=BRAND.icon?`<img src="${h(BRAND.icon)}" alt="">`:"🐉"; hl.classList.toggle("hasimg",!!BRAND.icon); }
+  if(hl){ hl.innerHTML=`<img src="${GM_LOGO}" alt="">`; hl.classList.add("hasimg"); }
   try{document.title=(BRAND.name||"Gang Manager")+" · Admin";}catch(e){}
 }
 function gate(icon,title,text,actions){
