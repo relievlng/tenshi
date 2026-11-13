@@ -106,9 +106,10 @@ All channel/role settings live in `/settings`. Staff commands need the leadershi
 | `PORT` | no | — | Set automatically by Railway for a web service; turns on the web roster manager |
 | `DISCORD_CLIENT_SECRET` | no | — | OAuth2 secret (Developer Portal → OAuth2) — required for the web manager login |
 | `WEB_SECRET` | no | derived | Optional extra secret used to sign web sessions |
-| `PUBLIC_URL` | no | request host | Your public site URL (e.g. `https://gang.example.com`) — used in subscribe links |
-| `BILLING_ENABLED` | no | off | `true` turns on the paywall: a server must be subscribed or the bot's paid commands are locked |
-| `BOT_OWNER_IDS` | no | — | Comma-separated Discord user IDs that bypass the paywall and can run `/subscription grant` |
+| `PUBLIC_URL` | no | Railway domain | Your public site URL (e.g. `https://gang.example.com`). Set it if you add a custom domain — login, links and share cards use it |
+| `BILLING_ENABLED` | no | **on** | Subscription required per server. Set `false` to switch the paywall off |
+| `BOT_OWNER_IDS` | no | auto | Extra operator user IDs. The account/team that owns the bot application is detected automatically |
+| `SUPPORT_URL` | no | — | A contact link (e.g. your Discord invite) shown when online payments aren't set up |
 | `TRIAL_DAYS` | no | `0` | Optional free-trial length in days when the bot joins a new server (0 = no trial; the default is monthly-sub only) |
 | `INVITE_PERMISSIONS` | no | sensible set | Override the permission integer on the "Add to Discord" invite link |
 | `STRIPE_SECRET_KEY` | no | — | Stripe secret key — turns on the Subscribe button (real monthly billing) |
@@ -164,45 +165,55 @@ channels — no slash commands needed. **Setup is owner-only**; added members ca
 use the panel but not change settings.
 
 **Setup**
-1. In the Discord **Developer Portal → OAuth2**, copy the **Client Secret** and
-   add a redirect: `https://<your-railway-domain>/callback`.
+1. In the Discord **Developer Portal**:
+   - **Bot → Public Bot: ON** — otherwise only you can add the bot to servers.
+   - **OAuth2 → Redirects**: add `https://<your-railway-domain>/callback`, and copy
+     the **Client Secret**. (Installation → Install Link can stay on *None*; the
+     site builds its own invite.)
 2. In Railway, add a **public domain** (Settings → Networking → Generate Domain)
    so the service gets a URL and a `PORT`.
 3. Add service variables: `DISCORD_CLIENT_SECRET=<the secret>`.
-4. Open `https://<your-railway-domain>/`, add the bot from the site, log in with
-   Discord, and configure everything from the **⚙️ Settings** tab.
+4. **Attach a Volume** and set `DATA_FILE=/data/gang_data.json` so settings and
+   subscriptions survive redeploys (see the note at the bottom).
+5. Open `https://<your-railway-domain>/`, log in with Discord, pick a server from
+   the server picker, add the bot, and configure everything in **⚙️ Settings**.
 
-## Selling it: subscriptions, invite & the settings editor
+## Selling it: subscriptions, the server picker & billing
 
-Gang Manager can be run as a paid product that other servers add themselves.
+Gang Manager runs as a paid product that other servers add themselves.
 
-- **Add to Discord** — the website's `/pricing` page has an "Add to Discord"
-  button (built from the bot's own client ID) so any server owner can invite it.
-- **Settings editor** — a **⚙️ Settings** tab in the web panel lets staff set
-  every channel and role from dropdowns (no slash commands), with a setup
-  progress bar, an **Add to another server** button, and a **Website panel
-  on/off** switch. All changes apply to Discord live and are logged.
-- **Subscriptions** — set `BILLING_ENABLED=true` to require a subscription per
-  server. An unsubscribed/expired server keeps `/subscription`, `/settings` and
-  `/gang_help` (so staff can set up and pay) but every other paid command is
-  locked until it's active. Servers activate by subscribing (monthly). There's
-  no free trial by default — set `TRIAL_DAYS` if you ever want one.
-  - **Take real payments (Stripe):** create a recurring Price in Stripe, set
-    `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` and `STRIPE_WEBHOOK_SECRET`, and point
-    a Stripe webhook at `https://<your-domain>/billing/webhook`
-    (events: `checkout.session.completed`, `invoice.paid`,
-    `invoice.payment_failed`, `customer.subscription.deleted`). The Subscribe
-    button then activates/expires servers automatically.
-  - **No Stripe yet:** you (an owner in `BOT_OWNER_IDS`) activate a server
-    manually after any payment with `/subscription grant days:30` (or
-    `lifetime:true`), check it with `/subscription status`, and cancel with
-    `/subscription cancel`.
+- **Login & server picker** — people log in with Discord (`identify` + `guilds`).
+  The panel lists their servers: ones they can add the bot to (one-click **Add
+  bot**, with that server pre-selected) and ones that already run it.
+- **You are the operator automatically** — whoever owns the bot application (or
+  its team) in the Developer Portal is detected on startup: you bypass the
+  paywall, see a **BOT OWNER** badge, can open any server's panel for support,
+  and servers you own are always free. Add extra operators with `BOT_OWNER_IDS`.
+- **Subscriptions (on by default)** — one monthly subscription per server. An
+  unsubscribed server keeps `/subscription`, `/settings` and `/gang_help`, but
+  every other command — and the web panel — is locked until it's active.
+- **Settings → Subscription** shows the status and paid-until date, **Subscribe**
+  or **Manage billing** (Stripe's portal: update the card, invoices, cancel), and
+  for you, owner tools: **+30 days**, **Lifetime**, **Expire**, **Sync Stripe**.
+  - **Take real payments (Stripe):** create a recurring Price, set
+    `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` and `STRIPE_WEBHOOK_SECRET`, turn on the
+    **Customer portal** in the Stripe dashboard, and point a webhook at
+    `https://<your-domain>/billing/webhook` with the events
+    `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`,
+    `customer.subscription.updated` and `customer.subscription.deleted`.
+    Paid-until dates follow Stripe's billing periods, a failed card gets a
+    warning (Stripe retries) instead of an instant lockout, and already-subscribed
+    servers are sent to the billing portal so nobody is charged twice. On every
+    start the bot re-syncs live subscriptions from Stripe.
+  - **No Stripe yet:** activate servers yourself from the panel's owner tools or
+    with `/subscription grant days:30` (or `lifetime:true`). Set `SUPPORT_URL` so
+    the Subscribe button shows a contact link meanwhile.
 
 | Command | What it does | Who |
 |---|---|---|
-| `/subscription status` | This server's plan, days left, and a renew link | Everyone |
-| `/subscription grant [days] [plan] [lifetime] [server_id]` | Activate/extend a server | Owner |
-| `/subscription cancel [server_id]` | Expire a server now | Owner |
+| `/subscription status` | This server's plan, paid-until date, and a subscribe link | Everyone |
+| `/subscription grant [days] [plan] [lifetime] [server_id]` | Activate/extend a server | Bot owner |
+| `/subscription cancel [server_id]` | Expire a server now | Bot owner |
 
 ## Run locally
 
@@ -218,6 +229,8 @@ Same as your other bot: push this repo, add `DISCORD_TOKEN` (and optionally
 `LEADERSHIP_ROLE`) as service variables, and set the start command to
 `python gang_bot.py`.
 
-> **Data persistence note:** Railway's filesystem resets on redeploy. To keep the
-> roster/KOS between deploys, attach a Volume and point `DATA_FILE` at it, e.g.
+> **Data persistence note:** Railway's filesystem resets on every redeploy. Without
+> a Volume, every push wipes settings, rosters, website access lists and manual
+> subscription grants (Stripe-paid subscriptions are re-synced on startup, but
+> nothing else is). Attach a Volume and point `DATA_FILE` at it, e.g.
 > `DATA_FILE=/data/gang_data.json`.
