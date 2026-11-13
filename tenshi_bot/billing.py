@@ -10,7 +10,7 @@ A server's subscription lives in its store under ``subscription`` (see
   the panel's owner tools (e.g. ♾ Lifetime for your own gang's server).
 
 The paywall is the same everywhere: without an active subscription, slash
-commands (except /subscription, /settings, /gang_help), buttons and menus,
+commands (except /subscription, /settings, /help), buttons and menus,
 welcome messages and the background jobs all pause in that server.
 
 The bot operator is detected automatically from the Discord application (the
@@ -55,7 +55,7 @@ DEFAULT_PLAN = "monthly"
 
 # Command (qualified) names that stay usable even when a server is NOT subscribed,
 # so staff can still check status, finish setup, and subscribe.
-GATE_EXEMPT_PREFIXES = ("subscription", "settings", "gang_help")
+GATE_EXEMPT_PREFIXES = ("subscription", "settings", "help")
 
 # Discord user ids that own the bot application (filled by detect_app_owners()).
 _APP_OWNERS: set[int] = set()

@@ -6,7 +6,7 @@ Run with `python gang_bot.py`. Features live in the tenshi_bot package:
   tenshi_bot/roster.py — /roster — live roster from rank roles, ranks, import_roles, add/remove/reset.
   tenshi_bot/kos.py — /kos — KOS list, sign-up → draw → staff approval → announce flow.
   tenshi_bot/settings.py — /settings — channel & role configuration.
-  tenshi_bot/panels.py — /role_menu, /radio, /eoi, /eoi_post and /gang_help.
+  tenshi_bot/panels.py — /role_menu, /radio, /eoi, /eoi_post and /help.
   tenshi_bot/tickets.py — Ticket / order system: panels, tickets, transcripts, priority, auto-close, stats.
   tenshi_bot/gang.py — /gang dashboard & profile, /strike, /war (live scoreboards).
 """
@@ -77,7 +77,7 @@ def _status_activities() -> list[discord.BaseActivity]:
         acts.append(line(f"⚔️ {wars} gang war{'s' if wars != 1 else ''} live"))
     if tickets:
         acts.append(line(f"🎫 {tickets} open ticket{'s' if tickets != 1 else ''}"))
-    acts.append(line("🥷 /gang_help"))
+    acts.append(line("🥷 /help"))
     return acts
 
 

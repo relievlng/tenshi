@@ -1,4 +1,4 @@
-"""/role_menu, /radio, /eoi, /eoi_post and /gang_help."""
+"""/role_menu, /radio, /eoi, /eoi_post and /help."""
 
 from .core import *  # noqa: F401,F403
 from .roster import *  # noqa: F401,F403
@@ -400,7 +400,7 @@ class EOIPromptView(GatedView):
         await interaction.response.send_modal(EOIModal())
 
 
-# ---- /gang_help ------------------------------------------------------------- #
+# ---- /help ------------------------------------------------------------- #
 
 _HELP_PAGES: dict[str, tuple[str, str, str]] = {
     "home": ("🏠", "Gang Manager — Command Guide",
@@ -479,7 +479,7 @@ class HelpView(discord.ui.View):
         )
 
 
-@bot.tree.command(name="gang_help", description="Interactive guide to every command")
+@bot.tree.command(name="help", description="Interactive guide to every command")
 async def gang_help(interaction: discord.Interaction) -> None:
     avatar = interaction.client.user.display_avatar.url if interaction.client.user else None
     await _send_card(

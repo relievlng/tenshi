@@ -1167,11 +1167,11 @@ class EOIModal(discord.ui.Modal, title="Join the Gang — Application"):
     )
     montage = discord.ui.Label(
         text="Montage or clips",
-        description="Show us your gameplay — one YouTube link per line (optional)",
+        description="Show us your gameplay — one YouTube link per line",
         component=discord.ui.TextInput(
             style=discord.TextStyle.paragraph,
             placeholder="https://youtu.be/…\nhttps://youtu.be/…",
-            required=False,
+            required=True,
             max_length=600,
         ),
     )

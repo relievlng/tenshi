@@ -1242,12 +1242,9 @@ async def ticket_panel(
     if await _deny(interaction, "post the ticket panel"):
         return
     store = guild_store(DATA, interaction.guild_id)
-    if not store.get("ticket_types"):
-        await interaction.response.send_message(
-            "Add at least one ticket type first with `/ticket type_add`.",
-            ephemeral=True,
-        )
-        return
+    has_types = bool(store.get("ticket_types"))
+    # Post regardless of types. With none, the panel shows a clean closed state
+    # (a disabled menu) and opens itself the moment a type is added.
     embed, options = _build_ticket_panel(interaction.guild, store, message)
     msg = await _send_card(interaction.channel, [embed], lambda: TicketPanelView(options))
     # remember where the panel lives so type changes can refresh it in place
@@ -1257,7 +1254,10 @@ async def ticket_panel(
         store["ticket_panel_message"] = message
         save_data(DATA)
     await interaction.response.send_message(
-        "Ticket panel posted. ✅ It updates on its own when you add or remove types.",
+        "Ticket panel posted. ✅ It updates on its own when you add or remove types."
+        if has_types else
+        "Ticket panel posted in **closed mode** 🔒 — there are no ticket types yet, so the "
+        "menu is disabled. Add one with `/ticket type_add` and the panel opens itself.",
         ephemeral=True,
     )
 

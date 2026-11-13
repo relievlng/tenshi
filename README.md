@@ -68,7 +68,7 @@ All channel/role settings live in `/settings`. Staff commands need the leadershi
 | `/settings channel` / `/settings role` | Set one channel or role setting from a short emoji list (leave empty to clear) | Leadership (leadership role: admin) |
 | `/settings logs #channel` | Send every log type to one channel in one go | Leadership |
 | `/settings logs_setup` | Auto-create a **📋 Gang Manager Logs** category with a channel for every log type (general, roster, KOS, recruitment, roles, joins, tickets, orders, website) and wire up all the settings. Re-run any time to re-create missing ones | Leadership |
-| `/gang_help` | List all commands | Everyone |
+| `/help` | List all commands | Everyone |
 
 ## Code layout
 
@@ -80,7 +80,7 @@ All channel/role settings live in `/settings`. Staff commands need the leadershi
 | `roster.py` | `/roster` — live roster from rank roles |
 | `kos.py` | `/kos` — KOS list and the sign-up → draw → approve flow |
 | `settings.py` | `/settings` |
-| `panels.py` | `/role_menu`, `/radio`, `/eoi`, `/eoi_post`, `/gang_help` |
+| `panels.py` | `/role_menu`, `/radio`, `/eoi`, `/eoi_post`, `/help` |
 | `tickets.py` | Ticket system: panel, tickets, transcripts, priority, auto-close, stats |
 | `gang.py` | `/gang`, `/strike`, `/war` |
 | `web.py` | Optional web roster manager (Discord-login gated) |
@@ -112,7 +112,7 @@ All channel/role settings live in `/settings`. Staff commands need the leadershi
 | `SUPPORT_URL` | no | — | A contact link (e.g. your Discord invite) shown when online payments aren't set up |
 | `TRIAL_DAYS` | no | `0` | Optional free-trial length in days when the bot joins a new server (0 = no trial; the default is monthly-sub only) |
 | `INVITE_PERMISSIONS` | no | sensible set | Override the permission integer on the "Add to Discord" invite link |
-| `BOT_STATUS` | no | — | A line of your own for the bot's status. It's pinned to the front of the live rotation (managing N members, managing N gangs, active wars, open tickets, `/gang_help`), which changes every 30s |
+| `BOT_STATUS` | no | — | A line of your own for the bot's status. It's pinned to the front of the live rotation (managing N members, managing N gangs, active wars, open tickets, `/help`), which changes every 30s |
 | `STRIPE_SECRET_KEY` | no | — | Stripe secret key — turns on the Subscribe button (real monthly billing) |
 | `STRIPE_PRICE_ID` | no | — | The Stripe recurring Price to sell (e.g. `price_123`) |
 | `STRIPE_WEBHOOK_SECRET` | no | — | Stripe webhook signing secret (`whsec_…`) so payments auto-activate/expire servers |
@@ -198,7 +198,7 @@ Gang Manager runs as a paid product that other servers add themselves.
   `BOT_OWNER_IDS`.
 - **Subscriptions (on by default)** — one monthly subscription per server.
   Without one, slash commands (except `/subscription`, `/settings`,
-  `/gang_help`), every button and menu, welcome/join messages, the EOI timer and
+  `/help`), every button and menu, welcome/join messages, the EOI timer and
   ticket auto-close all pause in that server, and the web panel shows Subscribe.
 - **Move a subscription between servers (free).** In the panel, pick another
   server you manage and choose **🔄 Move my subscription here** (also shown on the
