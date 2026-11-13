@@ -28,11 +28,14 @@ import time
 from .core import *  # noqa: F401,F403
 from .billing import (
     subscription_state,
+    effective_state,
     is_active,
     grant,
     expire,
     is_owner,
     guild_for_sub,
+    web_base_url,
+    note_base_url,
     PLANS,
     DEFAULT_PLAN,
 )
@@ -915,11 +918,19 @@ def _read_session(cookie: str | None) -> str | None:
     return payload.get("uid")
 
 
-# ---- Discord OAuth (identify only; the bot checks the role itself) ---------- #
+# ---- Discord OAuth --------------------------------------------------------- #
+# identify + guilds: who you are, and which servers you're in (so the panel can
+# offer "add the bot here" / "ask the owner" instead of a dead end).
 
 _OAUTH_AUTHORIZE = "https://discord.com/oauth2/authorize"
 _OAUTH_TOKEN = "https://discord.com/api/oauth2/token"
 _OAUTH_ME = "https://discord.com/api/users/@me"
+_OAUTH_MY_GUILDS = "https://discord.com/api/users/@me/guilds"
+_OAUTH_SCOPES = "identify guilds"
+_STATE_TTL = 900  # seconds a login link stays valid
+
+# uid -> {"at": ts, "user": {...}, "guilds": [...]} — filled at login, in memory
+_USER_CACHE: dict[str, dict] = {}
 
 
 def _configured() -> bool:
@@ -927,12 +938,57 @@ def _configured() -> bool:
 
 
 def _client_id() -> str:
+    # The OAuth client id is the *application* id (equal to the bot's user id
+    # for modern apps, but not for some older ones).
+    app_id = getattr(bot, "application_id", None)
+    if app_id:
+        return str(app_id)
     return str(getattr(getattr(bot, "user", None), "id", "") or "")
 
 
-def _redirect_uri(request) -> str:
+def _request_base(request) -> str:
     host = request.headers.get("X-Forwarded-Host") or request.host
-    return f"https://{host}/callback"
+    return f"https://{host}"
+
+
+def _canonical_base(request) -> str:
+    """One stable origin for login so the redirect URI always matches the one
+    registered in the Developer Portal and cookies stay on one host. Uses
+    PUBLIC_URL / WEB_URL when set, otherwise the host the visitor is on."""
+    explicit = (os.getenv("PUBLIC_URL") or os.getenv("WEB_URL") or "").strip().rstrip("/")
+    return explicit or _request_base(request)
+
+
+def _redirect_uri(request) -> str:
+    return f"{_canonical_base(request)}/callback"
+
+
+def _make_state() -> str:
+    """Signed, self-verifying login state. Valid for _STATE_TTL seconds even if
+    the browser that finishes the login isn't the one that started it (e.g. the
+    Discord mobile app hands the redirect to a different browser)."""
+    ts = str(int(time.time()))
+    nonce = secrets.token_urlsafe(12)
+    sig = hmac.new(_secret(), f"st.{ts}.{nonce}".encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{ts}.{nonce}.{sig}"
+
+
+def _state_ok(state: str | None) -> bool:
+    """Accept any state this server signed in the last _STATE_TTL seconds. We
+    deliberately don't require the state cookie: when Discord's mobile app (or
+    another tab) finishes the login, that cookie isn't there and the old check
+    failed with 'Login expired'."""
+    if not state or state.count(".") != 2:
+        return False
+    ts, nonce, sig = state.split(".")
+    good = hmac.new(_secret(), f"st.{ts}.{nonce}".encode(), hashlib.sha256).hexdigest()[:32]
+    if not hmac.compare_digest(sig, good):
+        return False
+    try:
+        age = int(time.time()) - int(ts)
+    except ValueError:
+        return False
+    return 0 <= age <= _STATE_TTL
 
 
 def _authorize_url(request, state: str) -> str:
@@ -942,7 +998,7 @@ def _authorize_url(request, state: str) -> str:
         {
             "client_id": _client_id(),
             "response_type": "code",
-            "scope": "identify",
+            "scope": _OAUTH_SCOPES,
             "redirect_uri": _redirect_uri(request),
             "state": state,
             "prompt": "none",
@@ -951,7 +1007,9 @@ def _authorize_url(request, state: str) -> str:
     return f"{_OAUTH_AUTHORIZE}?{q}"
 
 
-async def _oauth_exchange(code: str, redirect_uri: str) -> str | None:
+async def _oauth_exchange(code: str, redirect_uri: str) -> dict | None:
+    """Swap the login code for a token. Logs Discord's reason on failure so a
+    bad secret / redirect mismatch shows up clearly in the Railway logs."""
     secret = os.getenv("DISCORD_CLIENT_SECRET")
     if not secret or _aiohttp is None:
         return None
@@ -962,59 +1020,164 @@ async def _oauth_exchange(code: str, redirect_uri: str) -> str | None:
         "code": code,
         "redirect_uri": redirect_uri,
     }
-    async with _aiohttp.ClientSession() as s:
-        async with s.post(
-            _OAUTH_TOKEN,
-            data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        ) as r:
-            if r.status != 200:
-                return None
-            return (await r.json()).get("access_token")
+    try:
+        async with _aiohttp.ClientSession() as s:
+            async with s.post(
+                _OAUTH_TOKEN,
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            ) as r:
+                body = await r.json(content_type=None)
+                if r.status != 200:
+                    log.warning(
+                        "OAuth token exchange failed (%s): %s — check DISCORD_CLIENT_SECRET and that "
+                        "%s is listed under OAuth2 → Redirects", r.status, body, redirect_uri,
+                    )
+                    return None
+                return body
+    except Exception as exc:  # network hiccup
+        log.warning("OAuth token exchange error: %s", exc)
+        return None
+
+
+async def _oauth_get(url: str, token: str):
+    if _aiohttp is None:
+        return None
+    try:
+        async with _aiohttp.ClientSession() as s:
+            async with s.get(url, headers={"Authorization": f"Bearer {token}"}) as r:
+                if r.status != 200:
+                    return None
+                return await r.json(content_type=None)
+    except Exception as exc:
+        log.warning("OAuth GET %s failed: %s", url, exc)
+        return None
 
 
 async def _oauth_user(token: str) -> dict | None:
-    if _aiohttp is None:
+    return await _oauth_get(_OAUTH_ME, token)
+
+
+async def _oauth_guilds(token: str) -> list | None:
+    data = await _oauth_get(_OAUTH_MY_GUILDS, token)
+    return data if isinstance(data, list) else None
+
+
+def _avatar_url(user: dict) -> str:
+    uid, av = user.get("id"), user.get("avatar")
+    if uid and av:
+        ext = "gif" if str(av).startswith("a_") else "png"
+        return f"https://cdn.discordapp.com/avatars/{uid}/{av}.{ext}?size=64"
+    return "https://cdn.discordapp.com/embed/avatars/0.png"
+
+
+def _remember_user(uid: str, user: dict, guilds: list | None) -> None:
+    slim = []
+    for g in guilds or []:
+        try:
+            gid = str(g["id"])
+        except (KeyError, TypeError):
+            continue
+        icon = g.get("icon")
+        slim.append(
+            {
+                "id": gid,
+                "name": g.get("name") or "Server",
+                "icon": f"https://cdn.discordapp.com/icons/{gid}/{icon}.png?size=64" if icon else "",
+                "owner": bool(g.get("owner")),
+                "permissions": str(g.get("permissions") or "0"),
+            }
+        )
+    _USER_CACHE[str(uid)] = {
+        "at": int(time.time()),
+        "user": {
+            "id": str(uid),
+            "name": user.get("global_name") or user.get("username") or "You",
+            "avatar": _avatar_url(user),
+        },
+        "guilds": slim if guilds is not None else None,
+    }
+
+
+def _cached_profile(uid: str) -> dict:
+    entry = _USER_CACHE.get(str(uid))
+    if entry:
+        return entry["user"]
+    u = bot.get_user(int(uid)) if str(uid).isdigit() else None
+    if u is not None:
+        return {"id": str(uid), "name": getattr(u, "global_name", None) or u.name,
+                "avatar": str(u.display_avatar.url)}
+    return {"id": str(uid), "name": "You", "avatar": "https://cdn.discordapp.com/embed/avatars/0.png"}
+
+
+_PERM_ADMIN = 0x8
+_PERM_MANAGE_GUILD = 0x20
+
+
+def _server_picker(uid: str, accessible_ids: set) -> list | None:
+    """The user's servers that matter here: ones running the bot, and ones they
+    can add it to. None when we don't have their server list (old session)."""
+    entry = _USER_CACHE.get(str(uid))
+    if not entry or entry.get("guilds") is None:
         return None
-    async with _aiohttp.ClientSession() as s:
-        async with s.get(_OAUTH_ME, headers={"Authorization": f"Bearer {token}"}) as r:
-            if r.status != 200:
-                return None
-            return await r.json()
+    out = []
+    for g in entry["guilds"]:
+        bot_in = bot.get_guild(int(g["id"])) is not None
+        try:
+            perms = int(g["permissions"])
+        except (TypeError, ValueError):
+            perms = 0
+        can_manage = g["owner"] or bool(perms & (_PERM_ADMIN | _PERM_MANAGE_GUILD))
+        if not bot_in and not can_manage:
+            continue
+        out.append(
+            {
+                "id": g["id"],
+                "name": g["name"],
+                "icon": g["icon"],
+                "owner": g["owner"],
+                "bot_in": bot_in,
+                "access": g["id"] in accessible_ids,
+                "can_add": (not bot_in) and can_manage,
+            }
+        )
+    out.sort(key=lambda s: (not s["access"], not s["bot_in"], not s["can_add"], s["name"].lower()))
+    return out
 
 
-# ---- role-based access ------------------------------------------------------ #
+# ---- panel access ----------------------------------------------------------- #
 
 async def _has_web_access(guild, uid, live: bool = False) -> bool:
     """True only if the user may open this guild's web panel.
 
-    Access = the server owner, any admin, or a member on the panel's allowlist
-    (managed in Settings → Website access).
+    Access = the bot operator (support), the server owner, or a member the owner
+    added under Settings → Website access. Not every admin — you must own a
+    server with the bot, or be added by someone who does.
 
-    With `live=True` the member is fetched fresh from the API instead of the
-    gateway cache, so a role that was just removed is seen immediately even when
-    the bot isn't running the members intent (used by the fast logout poll)."""
-    member = None if live else guild.get_member(int(uid))
-    if member is None:
-        try:
-            member = await guild.fetch_member(int(uid))
-        except discord.HTTPException:
-            return False
-    # Access = the person who owns the bot in this server (its owner), the bot
-    # operator, or a member the owner has explicitly added. NOT every admin —
-    # you must own a server with the bot, or be added by someone who does.
+    Cheap by design: owners/outsiders are decided without any Discord API call.
+    Only allowlisted members are checked against the server (so someone who
+    left loses access); `live=True` forces a fresh fetch for the logout poll."""
     try:
-        if is_owner(member.id):  # bot operator (support)
-            return True
-        if getattr(guild, "owner_id", None) == member.id:
-            return True
-    except (AttributeError, TypeError):
-        pass
-    allowed = guild_store(DATA, guild.id).get("web_members") or []
-    try:
-        return int(uid) in {int(x) for x in allowed}
+        uid_i = int(uid)
     except (TypeError, ValueError):
         return False
+    if is_owner(uid_i):
+        return True
+    if getattr(guild, "owner_id", None) == uid_i:
+        return True
+    allowed = guild_store(DATA, guild.id).get("web_members") or []
+    try:
+        if uid_i not in {int(x) for x in allowed}:
+            return False
+    except (TypeError, ValueError):
+        return False
+    member = None if live else guild.get_member(uid_i)
+    if member is None:
+        try:
+            member = await guild.fetch_member(uid_i)
+        except discord.HTTPException:
+            return False
+    return True
 
 
 async def _accessible_guilds(uid) -> list:
@@ -1037,6 +1200,7 @@ def _guild_from(gid: str | None):
 
 
 async def _h_index(request):
+    note_base_url(_canonical_base(request))  # so links the bot posts point here
     return _aioweb.Response(text=_PAGE_HTML, content_type="text/html")
 
 
@@ -1157,17 +1321,20 @@ def _public_cfg() -> dict:
         "invite_url": _invite_url(),
         "stripe": _stripe_ready(),
         "plan": _plan_public(),
+        "support_url": _support_url(),
     }
 
 
 def _sub_public(gid: int) -> dict:
-    s = subscription_state(gid)
+    s = effective_state(gid)
     return {
         "active": s["active"],
+        "mode": s["mode"],
         "status": s["status"],
         "days_left": s["days_left"],
-        "trial": s["trial"],
+        "expires_at": s["expires_at"],
         "lifetime": s["lifetime"],
+        "has_billing": bool(s.get("customer_id")),
         "billing_enabled": s["billing_enabled"],
     }
 
@@ -1181,14 +1348,22 @@ async def _h_me(request):
     if not uid:
         return _aioweb.json_response({"authed": False, "reason": "login", "brand": brand, "public": cfg})
     guilds = await _accessible_guilds(uid)
+    profile = _cached_profile(uid)
+    servers = _server_picker(uid, {str(g.id) for g in guilds})
     if not guilds:
-        return _aioweb.json_response({"authed": False, "reason": "no_access", "brand": brand, "public": cfg})
+        return _aioweb.json_response(
+            {
+                "authed": False, "reason": "no_access", "brand": brand, "public": cfg,
+                "user": profile, "servers": servers,
+            }
+        )
     return _aioweb.json_response(
         {
             "authed": True,
             "brand": brand,
             "public": cfg,
-            "user": {"id": str(uid), "owner": is_owner(uid)},
+            "user": {**profile, "owner": is_owner(uid)},
+            "servers": servers,
             "guilds": [
                 {
                     "id": str(g.id),
@@ -1221,58 +1396,114 @@ async def _h_access(request):
     return _aioweb.json_response({"ok": False})
 
 
+def _simple_page(icon: str, title: str, text: str, actions: str = "", status: int = 200):
+    """A small branded page (errors, notices) that matches the site's look.
+    `text` and `actions` are trusted HTML built here, never user input."""
+    doc = (
+        "<!doctype html><html lang=en><head><meta charset=utf-8>"
+        "<meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>{html.escape(title)} · Gang Manager</title><style>"
+        ":root{color-scheme:dark}*{box-sizing:border-box}"
+        "body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;color:#ececf1;"
+        "font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+        "background:radial-gradient(1100px 560px at 15% -10%,#2a2a33 0%,transparent 60%),"
+        "radial-gradient(900px 520px at 110% 115%,#3b3b46 0%,transparent 55%),#060608}"
+        ".card{width:100%;max-width:440px;text-align:center;padding:36px 28px;border-radius:24px;"
+        "background:rgba(16,16,22,.74);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(10px);"
+        "box-shadow:0 30px 90px rgba(0,0,0,.55);animation:in .45s cubic-bezier(.2,.7,.2,1)}"
+        "@keyframes in{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}"
+        ".logo{width:84px;height:52px;object-fit:contain;filter:drop-shadow(0 0 26px rgba(255,255,255,.22))}"
+        ".ic{font-size:30px;margin:12px 0 2px}h1{font-size:22px;margin:6px 0 8px;letter-spacing:-.3px}"
+        "p{color:#a5a5b0;line-height:1.6;margin:0 0 22px;font-size:15px}code{color:#e8e8ee}"
+        ".row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}"
+        "a.b{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:12px;font-weight:700;"
+        "text-decoration:none;font-size:14px;border:1px solid rgba(255,255,255,.16);color:#fff;background:rgba(255,255,255,.06)}"
+        "a.b.p{background:linear-gradient(90deg,#c9c9d2,#fff);color:#09090c;border:none}"
+        "</style></head><body><div class=card>"
+        "<img class=logo src='/gm-logo.png' alt='Gang Manager'>"
+        f"<div class=ic>{icon}</div><h1>{html.escape(title)}</h1><p>{text}</p>"
+        f"<div class=row>{actions}</div></div></body></html>"
+    )
+    return _aioweb.Response(text=doc, status=status, content_type="text/html")
+
+
+_RETRY = "<a class='b p' href='/login'>Try again</a><a class='b' href='/'>Home</a>"
+
+
 async def _h_login(request):
     if not _configured():
-        return _aioweb.Response(
-            text="Login isn't set up on this server (DISCORD_CLIENT_SECRET is missing).",
-            status=503,
+        return _simple_page(
+            "⚙️", "Login isn't set up yet",
+            "The site owner still needs to add <b>DISCORD_CLIENT_SECRET</b> to the server settings.",
+            "<a class='b' href='/'>Back home</a>", 503,
         )
-    state = secrets.token_urlsafe(16)
-    resp = _aioweb.HTTPFound(_authorize_url(request, state))
-    resp.set_cookie(_STATE_COOKIE, state, max_age=600, httponly=True, secure=True, samesite="Lax")
-    return resp
+    canon = _canonical_base(request)
+    if canon.rstrip("/").lower() != _request_base(request).rstrip("/").lower():
+        # keep the whole login on one host so the redirect URI always matches
+        return _aioweb.HTTPFound(f"{canon}/login")
+    if not _client_id():
+        return _simple_page(
+            "⏳", "Almost ready", "The bot is still starting up — give it a few seconds.",
+            "<a class='b p' href='/login'>Try again</a>", 503,
+        )
+    return _aioweb.HTTPFound(_authorize_url(request, _make_state()))
 
 
 async def _h_callback(request):
-    if request.query.get("error"):
-        return _aioweb.Response(text="Login was cancelled.", status=400)
-    state = request.query.get("state")
-    if not state or state != request.cookies.get(_STATE_COOKIE):
-        return _aioweb.Response(text="Login expired — please try again.", status=400)
+    err = request.query.get("error")
+    if err:
+        if err == "access_denied":
+            return _simple_page("👋", "Login cancelled", "No problem — log in whenever you're ready.", _RETRY, 400)
+        return _simple_page(
+            "⚠️", "Discord stopped the login",
+            f"Discord said <code>{html.escape(err)}</code>. Please try again.", _RETRY, 400,
+        )
+    if not _state_ok(request.query.get("state")):
+        return _simple_page(
+            "⏳", "That login link expired",
+            "It was started a while ago or from an old tab. Start again and it'll go straight through.",
+            _RETRY, 400,
+        )
     code = request.query.get("code")
     if not code:
-        return _aioweb.Response(text="No code returned.", status=400)
-    token = await _oauth_exchange(code, _redirect_uri(request))
-    if not token:
-        return _aioweb.Response(text="Login failed (token exchange).", status=400)
-    user = await _oauth_user(token)
+        return _simple_page("⚠️", "Something went wrong", "Discord didn't send a login code back.", _RETRY, 400)
+    tok = await _oauth_exchange(code, _redirect_uri(request))
+    access = (tok or {}).get("access_token")
+    if not access:
+        return _simple_page(
+            "🔑", "Couldn't finish logging in",
+            "Discord didn't accept this login. Try again — if it keeps happening, the site owner "
+            "should check the OAuth2 client secret and that this site's <code>/callback</code> URL "
+            "is listed under OAuth2 → Redirects.",
+            _RETRY, 400,
+        )
+    user = await _oauth_user(access)
     if not user or not user.get("id"):
-        return _aioweb.Response(text="Couldn't read your Discord account.", status=400)
-    # Sign them in even if they have no accessible server yet — the panel's
-    # onboarding (add the bot → free trial → subscribe) takes over from there,
-    # instead of a dead-end "No access" page that blocks buying a plan.
-    uid = user["id"]
-    uname = user.get("global_name") or user.get("username") or str(uid)
-    for g in await _accessible_guilds(uid):
-        try:
-            gstore = guild_store(DATA, g.id)
-            gm = g.get_member(int(uid))
-            await send_log(
-                g, gstore, f"🌐 **{uname}** signed in to the website.",
-                category="web", actor=gm,
-            )
-        except (discord.HTTPException, ValueError, KeyError, TypeError):
-            pass
+        return _simple_page("⚠️", "Couldn't read your account", "Discord didn't share your account details.", _RETRY, 400)
+    uid = str(user["id"])
+    _remember_user(uid, user, await _oauth_guilds(access))
+    # Sign in even with no accessible server yet — the panel shows the next step
+    # (add the bot to one of your servers / ask an owner to add you).
+    if not is_owner(uid):  # operator support visits don't spam customers' logs
+        uname = user.get("global_name") or user.get("username") or uid
+        for g in await _accessible_guilds(uid):
+            try:
+                await send_log(
+                    g, guild_store(DATA, g.id), f"🌐 **{uname}** signed in to the website.",
+                    category="web", actor=g.get_member(int(uid)),
+                )
+            except (discord.HTTPException, ValueError, KeyError, TypeError):
+                pass
     resp = _aioweb.HTTPFound("/panel")
-    resp.set_cookie(
-        _COOKIE, _sign_session(user["id"]), max_age=43200,
-        httponly=True, secure=True, samesite="Lax",
-    )
+    resp.set_cookie(_COOKIE, _sign_session(uid), max_age=43200, httponly=True, secure=True, samesite="Lax")
     resp.del_cookie(_STATE_COOKIE)
     return resp
 
 
 async def _h_logout(request):
+    uid = _read_session(request.cookies.get(_COOKIE))
+    if uid:
+        _USER_CACHE.pop(str(uid), None)
     resp = _aioweb.HTTPFound("/")
     resp.del_cookie(_COOKIE)
     return resp
@@ -1304,8 +1535,8 @@ async def _gate(request, guild, allow_disabled: bool = False) -> tuple[bool, int
         store = guild_store(DATA, guild.id)
         if not store.get("web_enabled", True):
             return (False, 503, "The website panel is turned off for this server.")
-        if not is_active(guild.id):
-            return (False, 402, "This server's subscription has expired.")
+        if not is_active(guild.id) and not is_owner(uid):
+            return (False, 402, "This server needs an active subscription.")
     return (True, 200, "")
 
 
@@ -1982,28 +2213,26 @@ def _invite_perms() -> str:
     return raw if raw.isdigit() else str(_DEFAULT_INVITE_PERMS)
 
 
-def _invite_url() -> str:
+def _invite_url(guild_id: str | None = None) -> str:
+    """Bot invite link. With a guild id, Discord pre-selects that server."""
     cid = _client_id()
     if not cid:
         return ""
     from urllib.parse import urlencode
 
-    q = urlencode(
-        {
-            "client_id": cid,
-            "scope": "bot applications.commands",
-            "permissions": _invite_perms(),
-        }
-    )
-    return f"{_OAUTH_AUTHORIZE}?{q}"
+    params = {
+        "client_id": cid,
+        "scope": "bot applications.commands",
+        "permissions": _invite_perms(),
+    }
+    if guild_id and str(guild_id).isdigit():
+        params["guild_id"] = str(guild_id)
+        params["disable_guild_select"] = "true"
+    return f"{_OAUTH_AUTHORIZE}?{urlencode(params)}"
 
 
 def _public_base(request) -> str:
-    base = (os.getenv("PUBLIC_URL") or os.getenv("WEB_URL") or "").rstrip("/")
-    if base:
-        return base
-    host = request.headers.get("X-Forwarded-Host") or request.host
-    return f"https://{host}"
+    return _canonical_base(request)
 
 
 def _stripe_ready() -> bool:
@@ -2015,26 +2244,97 @@ def _plan_public() -> dict:
     return {"id": DEFAULT_PLAN, "label": p["label"], "price": p["price"], "days": p["days"]}
 
 
-async def _stripe_post(path: str, form: list[tuple[str, str]]) -> dict | None:
-    """Minimal Stripe REST POST (form-encoded). Returns parsed JSON or None."""
+async def _stripe_call(method: str, path: str, form=None, params=None) -> dict | None:
+    """Minimal Stripe REST call. Returns parsed JSON or None (and logs why)."""
     key = os.getenv("STRIPE_SECRET_KEY")
     if not key or _aiohttp is None:
         return None
     try:
         async with _aiohttp.ClientSession() as s:
-            async with s.post(
+            async with s.request(
+                method,
                 f"https://api.stripe.com/v1/{path}",
                 data=form,
+                params=params,
                 headers={"Authorization": f"Bearer {key}"},
             ) as r:
-                body = await r.json()
+                body = await r.json(content_type=None)
                 if r.status >= 400:
-                    log.error("Stripe %s failed (%s): %s", path, r.status, body.get("error", {}).get("message"))
+                    log.error("Stripe %s %s failed (%s): %s", method, path, r.status,
+                              (body or {}).get("error", {}).get("message"))
                     return None
                 return body
     except Exception as exc:  # pragma: no cover - network
-        log.error("Stripe %s error: %s", path, exc)
+        log.error("Stripe %s %s error: %s", method, path, exc)
         return None
+
+
+async def _stripe_post(path: str, form: list[tuple[str, str]]) -> dict | None:
+    return await _stripe_call("POST", path, form=form)
+
+
+async def _stripe_get(path: str, params: dict | None = None) -> dict | None:
+    return await _stripe_call("GET", path, params=params)
+
+
+def _ts_to_dt(ts) -> "datetime.datetime | None":
+    import datetime as _dt
+    try:
+        return _dt.datetime.fromtimestamp(int(ts), tz=_dt.timezone.utc)
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def _sub_period_end(sub: dict):
+    """A Stripe Subscription's current period end (field moved onto the items
+    in newer API versions)."""
+    end = sub.get("current_period_end")
+    if not end:
+        items = ((sub.get("items") or {}).get("data")) or []
+        ends = [i.get("current_period_end") for i in items if i.get("current_period_end")]
+        end = max(ends) if ends else None
+    return _ts_to_dt(end)
+
+
+async def sync_subscriptions_from_stripe() -> int:
+    """Re-apply every live Stripe subscription to its server. Stripe is the
+    source of truth for payments, so this heals subscriptions if the data file
+    was reset (e.g. a redeploy without a volume). Safe to run any time — grants
+    only ever move the paid-until date forward. Returns servers updated."""
+    import datetime as _dt
+    if not os.getenv("STRIPE_SECRET_KEY"):
+        return 0
+    updated, after, pages = 0, None, 0
+    while pages < 20:
+        params = {"status": "all", "limit": "100"}
+        if after:
+            params["starting_after"] = after
+        page = await _stripe_get("subscriptions", params)
+        if not page:
+            break
+        pages += 1
+        for sub in page.get("data") or []:
+            meta = sub.get("metadata") or {}
+            gid = meta.get("guild_id")
+            if not gid or not str(gid).isdigit():
+                continue  # not a Gang Manager subscription
+            if sub.get("status") not in ("active", "trialing", "past_due"):
+                continue
+            end = _sub_period_end(sub)
+            until = (end or _dt.datetime.now(_dt.timezone.utc)) + _dt.timedelta(days=1)
+            grant(
+                int(gid), until=until, plan=DEFAULT_PLAN, status="active",
+                customer_id=sub.get("customer"), sub_id=sub.get("id"),
+                purchaser_id=meta.get("purchaser_id"),
+            )
+            updated += 1
+        data = page.get("data") or []
+        if not page.get("has_more") or not data:
+            break
+        after = data[-1].get("id")
+    if updated:
+        log.info("Stripe sync: refreshed %d server subscription(s).", updated)
+    return updated
 
 
 # ---- pricing / invite landing ---------------------------------------------- #
@@ -2110,9 +2410,12 @@ async def _h_invite(request):
     uid = _read_session(request.cookies.get(_COOKIE))
     if not uid:
         return _aioweb.HTTPFound("/login")
-    url = _invite_url()
+    url = _invite_url(request.query.get("guild"))
     if not url:
-        return _aioweb.Response(text="The invite link isn't ready yet — try again shortly.", status=503)
+        return _simple_page(
+            "⏳", "Almost ready", "The bot is still starting up — try again in a few seconds.",
+            "<a class='b p' href='/panel'>Back to the panel</a>", 503,
+        )
     return _aioweb.HTTPFound(url)
 
 
@@ -2372,6 +2675,7 @@ fetch("/api/me").then(function(r){return r.json();}).then(function(me){
 
 
 async def _h_landing(request):
+    note_base_url(_canonical_base(request))
     return _aioweb.Response(text=_LANDING_HTML, content_type="text/html")
 
 
@@ -2380,32 +2684,59 @@ def _pick_billing_guild(request):
     return _guild_from(request.query.get("guild"))
 
 
+_BACK = "<a class='b p' href='/panel'>Back to the panel</a>"
+_NO_ACCESS_TEXT = "Only the server owner (or someone they added in Settings → Website access) can manage it."
+
+
+def _support_url() -> str:
+    return (os.getenv("SUPPORT_URL") or "").strip()
+
+
+def _support_actions() -> str:
+    u = _support_url()
+    contact = (
+        f"<a class='b p' href='{html.escape(u, quote=True)}' target='_blank' rel='noopener'>Contact us</a>"
+        if u else ""
+    )
+    return contact + "<a class='b' href='/panel'>Back to the panel</a>"
+
+
 async def _h_billing_checkout(request):
-    """Start a Stripe Checkout subscription for a guild the user can manage."""
-    if not _stripe_ready():
-        return _aioweb.HTTPFound("/pricing")
+    """Start a Stripe Checkout subscription for one server the user manages.
+    A server that's already paid for goes to the billing portal instead, so
+    nobody is ever charged twice for the same server."""
     uid = _read_session(request.cookies.get(_COOKIE))
     if not uid:
         return _aioweb.HTTPFound("/login")
+    if not _stripe_ready():
+        who = "Contact us" if _support_url() else "Ask the bot owner"
+        return _simple_page(
+            "💳", "Payments are being set up",
+            f"Online checkout isn't switched on yet. {who} and they'll activate your server.",
+            _support_actions(), 503,
+        )
     guild = _pick_billing_guild(request)
     if guild is None:
-        # Let them choose a server they manage.
         guilds = await _accessible_guilds(uid)
         if len(guilds) == 1:
             guild = guilds[0]
         elif not guilds:
-            return _aioweb.Response(text=_DENIED_HTML, status=403, content_type="text/html")
+            return _aioweb.HTTPFound("/panel")  # the panel walks them through adding the bot
         else:
             opts = "".join(
-                f"<li><a href='/billing/checkout?guild={g.id}'>{html.escape(g.name)}</a></li>" for g in guilds
+                f"<a class='b' href='/billing/checkout?guild={g.id}'>{html.escape(g.name)}</a>" for g in guilds
             )
-            return _aioweb.Response(
-                text=f"<!doctype html><meta charset=utf-8><body style='font-family:sans-serif;background:#0b0b0d;color:#eee;padding:40px'>"
-                f"<h3>Which server?</h3><ul>{opts}</ul></body>",
-                content_type="text/html",
-            )
+            return _simple_page("💳", "Which server?", "Each subscription covers one server — pick one.", opts)
     if not await _has_web_access(guild, uid):
-        return _aioweb.Response(text=_DENIED_HTML, status=403, content_type="text/html")
+        return _simple_page("🔒", "No access to that server", _NO_ACCESS_TEXT, _BACK, 403)
+    st = effective_state(guild.id)
+    if st["mode"] in ("owner", "free", "lifetime"):
+        return _simple_page(
+            "✅", "Already unlocked",
+            f"<b>{html.escape(guild.name)}</b> doesn't need a subscription — everything's already on.", _BACK,
+        )
+    if st["active"] and st.get("customer_id"):
+        return _aioweb.HTTPFound(f"/billing/portal?guild={guild.id}")
 
     base = _public_base(request)
     form = [
@@ -2413,7 +2744,7 @@ async def _h_billing_checkout(request):
         ("line_items[0][price]", os.getenv("STRIPE_PRICE_ID", "")),
         ("line_items[0][quantity]", "1"),
         ("success_url", f"{base}/billing/success?session_id={{CHECKOUT_SESSION_ID}}"),
-        ("cancel_url", f"{base}/pricing"),
+        ("cancel_url", f"{base}/panel"),
         ("client_reference_id", str(guild.id)),
         ("metadata[guild_id]", str(guild.id)),
         ("metadata[purchaser_id]", str(uid)),
@@ -2423,18 +2754,43 @@ async def _h_billing_checkout(request):
     ]
     session = await _stripe_post("checkout/sessions", form)
     if not session or not session.get("url"):
-        return _aioweb.Response(text="Couldn't start checkout. Try again later.", status=502)
+        return _simple_page("⚠️", "Couldn't start checkout", "Stripe didn't respond — please try again in a moment.",
+                            _BACK, 502)
     return _aioweb.HTTPFound(session["url"])
 
 
+async def _h_billing_portal(request):
+    """Stripe's hosted billing portal: update the card, see invoices, cancel."""
+    uid = _read_session(request.cookies.get(_COOKIE))
+    if not uid:
+        return _aioweb.HTTPFound("/login")
+    guild = _pick_billing_guild(request)
+    if guild is None or not await _has_web_access(guild, uid):
+        return _simple_page("🔒", "No access to that server", _NO_ACCESS_TEXT, _BACK, 403)
+    if not _can_setup(guild, uid):
+        return _simple_page("🔒", "Owner only",
+                            "Only the server owner or whoever bought the subscription can manage billing.", _BACK, 403)
+    cust = (guild_store(DATA, guild.id).get("subscription") or {}).get("customer_id")
+    if not cust:
+        return _aioweb.HTTPFound(f"/billing/checkout?guild={guild.id}")
+    sess = await _stripe_post(
+        "billing_portal/sessions",
+        [("customer", cust), ("return_url", f"{_public_base(request)}/panel")],
+    )
+    if not sess or not sess.get("url"):
+        return _simple_page(
+            "⚠️", "Billing portal unavailable",
+            "Stripe couldn't open the billing portal. The site owner may need to switch on the "
+            "customer portal in the Stripe dashboard.", _BACK, 502,
+        )
+    return _aioweb.HTTPFound(sess["url"])
+
+
 async def _h_billing_success(request):
-    return _aioweb.Response(
-        text="<!doctype html><meta charset=utf-8><title>Thanks</title>"
-        "<meta http-equiv=refresh content='4;url=/panel'>"
-        "<body style='font-family:sans-serif;background:#07070a;color:#ececf1;text-align:center;padding:14vh 18px'>"
-        "<h1>✅ You're subscribed</h1><p style='color:#b8b8c2'>Activation lands in a few seconds. "
-        "Taking you to the panel…</p><p><a style='color:#c9c9d2' href='/panel'>Open now</a></p></body>",
-        content_type="text/html",
+    return _simple_page(
+        "✅", "You're subscribed!", "Activation lands in a few seconds — taking you to your panel…",
+        "<a class='b p' href='/panel'>Open the panel</a>"
+        "<script>setTimeout(function(){location.href='/panel'},3500)</script>",
     )
 
 
@@ -2450,44 +2806,97 @@ def _stripe_sig_ok(payload: bytes, header: str, secret: str) -> bool:
         return False
 
 
-def _event_guild_id(obj: dict) -> int | None:
-    for path in (
-        ("metadata", "guild_id"),
-        ("subscription_details", "metadata", "guild_id"),
-    ):
-        cur = obj
-        for k in path:
+def _dig(obj, *path):
+    cur = obj
+    for k in path:
+        if isinstance(k, int):
+            cur = cur[k] if isinstance(cur, list) and len(cur) > k else None
+        else:
             cur = cur.get(k) if isinstance(cur, dict) else None
-        if cur:
-            try:
-                return int(cur)
-            except (TypeError, ValueError):
-                pass
-    ref = obj.get("client_reference_id")
-    if ref:
-        try:
-            return int(ref)
-        except (TypeError, ValueError):
-            pass
-    return None
+        if cur is None:
+            return None
+    return cur
 
 
 def _event_meta(obj: dict, key: str):
-    for path in ((("metadata", key)), ("subscription_details", "metadata", key)):
-        cur = obj
-        for k in path:
-            cur = cur.get(k) if isinstance(cur, dict) else None
-        if cur:
-            return cur
+    """A metadata value from wherever Stripe put it: the object itself, an
+    invoice's subscription details (old and new API shapes), or its first line."""
+    for path in (
+        ("metadata", key),
+        ("subscription_details", "metadata", key),
+        ("parent", "subscription_details", "metadata", key),
+        ("lines", "data", 0, "metadata", key),
+    ):
+        v = _dig(obj, *path)
+        if v:
+            return v
     return None
 
 
+def _event_guild_id(obj: dict) -> int | None:
+    for v in (_event_meta(obj, "guild_id"), obj.get("client_reference_id")):
+        if v and str(v).isdigit():
+            return int(v)
+    return None
+
+
+def _event_sub_id(obj: dict) -> str | None:
+    """The Stripe *subscription* id an event is about — never an invoice id."""
+    if obj.get("object") == "subscription":
+        return obj.get("id")
+    for path in (
+        ("subscription",),
+        ("parent", "subscription_details", "subscription"),
+        ("lines", "data", 0, "subscription"),
+        ("lines", "data", 0, "parent", "subscription_item_details", "subscription"),
+    ):
+        v = _dig(obj, *path)
+        if isinstance(v, dict):
+            v = v.get("id")
+        if isinstance(v, str) and v.startswith("sub_"):
+            return v
+    return None
+
+
+def _event_period_end(obj: dict):
+    """When the period this event pays for ends."""
+    if obj.get("object") == "subscription":
+        return _sub_period_end(obj)
+    ends = [
+        _dig(line, "period", "end")
+        for line in (_dig(obj, "lines", "data") or [])
+        if isinstance(line, dict)
+    ]
+    ends = [e for e in ends if e]
+    return _ts_to_dt(max(ends)) if ends else None
+
+
+def _is_current_sub(gid: int, sub_id: str | None) -> bool:
+    """True if this Stripe subscription is the one the server is running on (or
+    the server has none recorded) — so a stale cancel can't kill a newer sub."""
+    stored = (guild_store(DATA, gid).get("subscription") or {}).get("sub_id")
+    return not stored or not sub_id or stored == sub_id
+
+
+async def _notify(gid: int, text: str) -> None:
+    g = bot.get_guild(gid)
+    if g is not None:
+        try:
+            await send_log(g, guild_store(DATA, gid), text, category="web")
+        except discord.HTTPException:
+            pass
+
+
 async def _h_billing_webhook(request):
+    import datetime as _dt
+
     secret = os.getenv("STRIPE_WEBHOOK_SECRET")
     payload = await request.read()
     if secret:
         if not _stripe_sig_ok(payload, request.headers.get("Stripe-Signature", ""), secret):
             return _aioweb.Response(status=400, text="bad signature")
+    else:
+        log.warning("STRIPE_WEBHOOK_SECRET isn't set — Stripe webhooks aren't being verified.")
     try:
         event = json.loads(payload.decode())
     except (ValueError, UnicodeDecodeError):
@@ -2496,52 +2905,52 @@ async def _h_billing_webhook(request):
     etype = event.get("type", "")
     obj = (event.get("data") or {}).get("object") or {}
     gid = _event_guild_id(obj)
-    days = PLANS[DEFAULT_PLAN]["days"] + 1  # a day of slack so renewals never gap
+    if gid is None:
+        return _aioweb.json_response({"received": True, "ignored": True})  # not ours
+    sub_id = _event_sub_id(obj)
+    now = _dt.datetime.now(_dt.timezone.utc)
 
     if etype in ("checkout.session.completed", "invoice.paid", "invoice.payment_succeeded"):
-        if gid is not None:
-            sub_id = obj.get("subscription") or obj.get("id")
-            # One server per subscription: if this Stripe sub already powers a
-            # different server, don't let it unlock a second one.
-            other = guild_for_sub(sub_id, exclude_guild=gid)
-            if other is not None:
-                log.warning("Sub %s already active on guild %s — refusing to bind guild %s", sub_id, other, gid)
-                g = bot.get_guild(gid)
-                if g is not None:
-                    try:
-                        await send_log(
-                            g, guild_store(DATA, gid),
-                            f"⚠️ This subscription is already active on another server (`{other}`). "
-                            "Each subscription covers one server — start a separate subscription here.",
-                            category="web",
-                        )
-                    except discord.HTTPException:
-                        pass
-                return _aioweb.json_response({"received": True, "conflict": True})
-            grant(
-                gid,
-                days=days,
-                plan=DEFAULT_PLAN,
-                status="active",
-                customer_id=obj.get("customer"),
-                sub_id=sub_id,
-                purchaser_id=_event_meta(obj, "purchaser_id"),
-            )
-            g = bot.get_guild(gid)
-            if g is not None:
-                try:
-                    await send_log(g, guild_store(DATA, gid), "💳 Subscription payment received — active.", category="web")
-                except discord.HTTPException:
-                    pass
-    elif etype in ("customer.subscription.deleted", "invoice.payment_failed"):
-        if gid is not None:
+        if etype == "checkout.session.completed" and obj.get("payment_status") == "unpaid":
+            return _aioweb.json_response({"received": True})  # invoice.paid activates it later
+        # One server per subscription: a sub that already powers another server
+        # can't unlock a second one.
+        other = guild_for_sub(sub_id, exclude_guild=gid)
+        if other is not None:
+            log.warning("Sub %s already active on guild %s — refusing to bind guild %s", sub_id, other, gid)
+            await _notify(gid, f"⚠️ That subscription already covers another server (`{other}`). "
+                               "Each subscription covers one server — start a separate one here.")
+            return _aioweb.json_response({"received": True, "conflict": True})
+        end = _event_period_end(obj)
+        # Paid-until = end of the billed period (+1 day grace). Grants only move
+        # forward, so checkout + invoice for the same payment never stack.
+        until = (end or now + _dt.timedelta(days=PLANS[DEFAULT_PLAN]["days"])) + _dt.timedelta(days=1)
+        was_active = subscription_state(gid)["active"]
+        grant(
+            gid, until=until, plan=DEFAULT_PLAN, status="active",
+            customer_id=obj.get("customer"), sub_id=sub_id,
+            purchaser_id=_event_meta(obj, "purchaser_id"),
+        )
+        if not was_active:
+            await _notify(gid, "💳 Subscription active — Gang Manager is fully unlocked. Thanks!")
+    elif etype == "invoice.payment_failed":
+        # Stripe retries failed cards; keep what's already paid for and warn.
+        await _notify(gid, "⚠️ A subscription payment failed. Stripe will retry — update the card from "
+                           "**Settings → Subscription → Manage billing** to avoid an interruption.")
+    elif etype == "customer.subscription.updated":
+        status = obj.get("status")
+        if status in ("canceled", "unpaid", "incomplete_expired") and _is_current_sub(gid, sub_id):
             expire(gid)
-            g = bot.get_guild(gid)
-            if g is not None:
-                try:
-                    await send_log(g, guild_store(DATA, gid), "🔒 Subscription ended (cancelled or payment failed).", category="web")
-                except discord.HTTPException:
-                    pass
+            await _notify(gid, "🔒 Subscription ended — Gang Manager is paused here until it's renewed.")
+        elif status in ("active", "trialing"):
+            end = _sub_period_end(obj)
+            if end is not None:
+                grant(gid, until=end + _dt.timedelta(days=1), plan=DEFAULT_PLAN, status="active",
+                      customer_id=obj.get("customer"), sub_id=sub_id)
+    elif etype == "customer.subscription.deleted":
+        if _is_current_sub(gid, sub_id):
+            expire(gid)
+            await _notify(gid, "🔒 Subscription cancelled — Gang Manager is paused here until it's renewed.")
     return _aioweb.json_response({"received": True})
 
 
@@ -2610,7 +3019,43 @@ def _settings_list(guild: "discord.Guild", store: dict) -> dict:
         "web_enabled": bool(store.get("web_enabled", True)),
         "invite_url": _invite_url(),
         "web_access": _web_members_list(guild, store),
+        "subscription": _sub_public(guild.id),
+        "stripe": _stripe_ready(),
     }
+
+
+async def _h_sub_admin(request):
+    """Bot-owner subscription controls from the panel: comp 30 days, lifetime,
+    expire, or re-sync everything from Stripe."""
+    guild = _guild_from(request.query.get("guild"))
+    if guild is None:
+        return _aioweb.json_response({"error": "Guild not found."}, status=404)
+    uid = _read_session(request.cookies.get(_COOKIE))
+    if not uid or not is_owner(uid):
+        return _aioweb.json_response({"error": "Only the bot owner can do that."}, status=403)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    action = body.get("action")
+    if action == "grant30":
+        grant(guild.id, days=30, plan=DEFAULT_PLAN, status="active")
+        msg = "Added 30 days"
+    elif action == "lifetime":
+        grant(guild.id, lifetime=True, plan="lifetime", status="active")
+        msg = "Granted lifetime access"
+    elif action == "expire":
+        expire(guild.id)
+        msg = "Subscription expired"
+    elif action == "sync":
+        n = await sync_subscriptions_from_stripe()
+        msg = f"Synced {n} subscription(s) from Stripe"
+    else:
+        return _aioweb.json_response({"error": "Unknown action."}, status=400)
+    if action != "sync":
+        await send_log(guild, guild_store(DATA, guild.id), f"💳 {msg} — by the bot owner from the panel.",
+                       category="web", actor=_web_actor(request, guild))
+    return _aioweb.json_response({"ok": True, "message": msg, "subscription": _sub_public(guild.id)})
 
 
 def _web_members_list(guild: "discord.Guild", store: dict) -> dict:
@@ -2815,6 +3260,7 @@ async def start_web_server() -> None:
             _aioweb.get("/invite", _h_invite),
             _aioweb.get("/billing/checkout", _h_billing_checkout),
             _aioweb.get("/billing/success", _h_billing_success),
+            _aioweb.get("/billing/portal", _h_billing_portal),
             _aioweb.post("/billing/webhook", _h_billing_webhook),
             _aioweb.get("/login", _h_login),
             _aioweb.get("/callback", _h_callback),
@@ -2851,6 +3297,7 @@ async def start_web_server() -> None:
             _aioweb.post("/api/web_member_add", _h_web_member_add),
             _aioweb.post("/api/web_member_remove", _h_web_member_remove),
             _aioweb.post("/api/logs_setup", _h_logs_setup),
+            _aioweb.post("/api/sub_admin", _h_sub_admin),
         ]
     )
     runner = _aioweb.AppRunner(app)
@@ -2859,17 +3306,6 @@ async def start_web_server() -> None:
     await site.start()
     _web_started = True
     log.info("🌐 Roster web manager listening on :%s", port)
-
-
-_DENIED_HTML = (
-    "<!doctype html><meta charset=utf-8><title>No access</title>"
-    "<body style='background:#0b0b0d;color:#ececf1;font-family:sans-serif;"
-    "display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center'>"
-    "<div><h2>🚫 No access</h2>"
-    "<p style='color:#9a9aa6'>You don't have access to this panel yet.<br>"
-    "The server owner can add you under <b>⚙️ Settings → Website access</b>.</p>"
-    "<p><a style='color:#9a9aa8' href='/logout'>Log out</a></p></div></body>"
-)
 
 
 # --------------------------------------------------------------------------- #

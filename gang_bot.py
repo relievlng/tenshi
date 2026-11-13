@@ -78,7 +78,17 @@ async def on_ready() -> None:
         ticket_autoclose_loop.start()
     if not eoi_timer_loop.is_running():
         eoi_timer_loop.start()
+    # Recognise whoever owns the bot application as the operator (no env needed).
+    await detect_app_owners()
     await start_web_server()
+    # Stripe is the source of truth for payments: re-apply live subscriptions in
+    # the background, so a reset data file never locks out paying servers.
+    async def _stripe_heal():
+        try:
+            await sync_subscriptions_from_stripe()
+        except Exception as exc:
+            log.error("Stripe sync failed: %s", exc)
+    asyncio.create_task(_stripe_heal())
     try:
         synced = await bot.tree.sync()
         log.info("Synced %d slash commands.", len(synced))
