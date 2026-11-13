@@ -3789,6 +3789,8 @@ async def start_web_server() -> None:
             _aioweb.get("/pricing", _h_landing),
             _aioweb.get("/invite", _h_invite),
             _aioweb.get("/api/stats", _h_stats),
+            _aioweb.get("/api/stats/", _h_stats),
+            _aioweb.get("/stats", _h_stats),
             _aioweb.get("/billing/checkout", _h_billing_checkout),
             _aioweb.get("/billing/success", _h_billing_success),
             _aioweb.get("/billing/portal", _h_billing_portal),
