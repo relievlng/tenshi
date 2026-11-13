@@ -990,17 +990,24 @@ async def _has_web_access(guild, uid, live: bool = False) -> bool:
     With `live=True` the member is fetched fresh from the API instead of the
     gateway cache, so a role that was just removed is seen immediately even when
     the bot isn't running the members intent (used by the fast logout poll)."""
-    store = guild_store(DATA, guild.id)
-    rid = store.get("web_role_id")
-    if not rid:
-        return False
     member = None if live else guild.get_member(int(uid))
     if member is None:
         try:
             member = await guild.fetch_member(int(uid))
         except discord.HTTPException:
             return False
-    return any(r.id == rid for r in member.roles)
+    # The server owner and admins always get in — they're the buyer/operator and
+    # need the panel to configure the bot right after adding it.
+    try:
+        if getattr(guild, "owner_id", None) == member.id:
+            return True
+        perms = getattr(member, "guild_permissions", None)
+        if perms is not None and perms.administrator:
+            return True
+    except (AttributeError, TypeError):
+        pass
+    rid = guild_store(DATA, guild.id).get("web_role_id")
+    return bool(rid) and any(r.id == rid for r in member.roles)
 
 
 async def _accessible_guilds(uid) -> list:
@@ -2053,6 +2060,19 @@ async def _h_pricing(request):
     return _aioweb.Response(text=_pricing_page(request), content_type="text/html")
 
 
+async def _h_invite(request):
+    """Login-gated bot invite. Only a signed-in user can add the bot; they land
+    back on the panel afterward. The bot itself still enforces the subscription
+    once it's in the server (free trial first, then paywall)."""
+    uid = _read_session(request.cookies.get(_COOKIE))
+    if not uid:
+        return _aioweb.HTTPFound("/login")
+    url = _invite_url()
+    if not url:
+        return _aioweb.Response(text="The invite link isn't ready yet — try again shortly.", status=503)
+    return _aioweb.HTTPFound(url)
+
+
 _LANDING_HTML = r"""<!doctype html><html lang=en><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Gang Manager — the all-in-one FiveM gang bot</title>
@@ -2176,10 +2196,10 @@ footer a{color:var(--silver)}
   <h1>Run your gang<br><span class=g>like a machine.</span></h1>
   <p class=lead>Roster, KOS, strikes, wars, tickets and recruitment — one Discord bot with a full web control panel. Add it, start your free trial, and command everything from the browser.</p>
   <div class=cta>
-    <a id="heroInvite" class="btn primary" href="#pricing">➕ Add to Discord</a>
+    <a id="heroInvite" class="btn primary" href="/invite">➕ Add to Discord</a>
     <a class="btn" href="#pricing">See pricing</a>
   </div>
-  <div class=trust id="heroStatus">7-day free trial · 1 server per subscription · cancel anytime</div>
+  <div class=trust id="heroStatus">Log in with Discord · 7-day free trial · 1 server per subscription</div>
 </header>
 
 <div class=marq><div class=row id="marqRow"></div></div>
@@ -2226,8 +2246,8 @@ footer a{color:var(--silver)}
       <li><span class=c>✓</span> Web control panel &amp; live logs</li>
       <li><span class=c>✓</span> 1 Discord server · cancel anytime</li>
     </ul>
-    <a id="buyBtn" class="btn primary" style="width:100%" href="/login">Start free trial</a>
-    <a id="inviteBtn2" class="btn" style="width:100%;margin-top:10px" href="#">➕ Add to Discord</a>
+    <a id="buyBtn" class="btn primary" style="width:100%" href="/login">Log in to start</a>
+    <a id="inviteBtn2" class="btn" style="width:100%;margin-top:10px" href="/invite">➕ Add to Discord</a>
   </div>
 </section>
 
@@ -2247,7 +2267,7 @@ footer a{color:var(--silver)}
     <h2 style="margin-bottom:10px">Ready to take over the city?</h2>
     <p class=sub style="margin-bottom:24px">Add Gang Manager and start your free trial right now.</p>
     <div class=cta>
-      <a id="inviteBtn3" class="btn primary" href="#">➕ Add to Discord</a>
+      <a id="inviteBtn3" class="btn primary" href="/invite">➕ Add to Discord</a>
       <a id="panelBtn" class="btn" href="/login">Open the panel</a>
     </div>
   </div>
@@ -2282,25 +2302,28 @@ document.addEventListener("mousemove",function(e){
 // reveal on scroll
 var io=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){x.target.classList.add("in");io.unobserve(x.target);}});},{threshold:.12});
 document.querySelectorAll(".rev").forEach(function(e,i){e.style.transitionDelay=(i%4*60)+"ms";io.observe(e);});
-// adapt to auth + subscription
-function setInvite(url){["heroInvite","inviteBtn2","inviteBtn3"].forEach(function(id){var el=document.getElementById(id);if(!el)return;if(url){el.href=url;el.target="_blank";el.rel="noopener";}else{el.classList.add("disabled");el.title="Invite link loads once the bot is online";}});}
+// adapt to auth + subscription (invite buttons always route through /invite,
+// which forces Discord login before the bot can be added)
 fetch("/api/me").then(function(r){return r.json();}).then(function(me){
- var pub=me.public||{};setInvite(pub.invite_url||"");
+ var pub=me.public||{};
  var buy=document.getElementById("buyBtn"),nav=document.getElementById("navCta"),panel=document.getElementById("panelBtn");
- var checkout=(pub.stripe)?"/billing/checkout":null;
+ var checkout=(pub.stripe)?"/billing/checkout":"/panel";
  if(me.authed){
    nav.href="/panel";nav.textContent="Open panel";panel.href="/panel";
-   // find best guild (active first)
    var gs=me.guilds||[],act=gs.find(function(x){return x.subscription&&x.subscription.active;});
    if(act){
      buy.textContent="Open your panel";buy.href="/panel";
-     document.getElementById("heroStatus").textContent="✓ Subscription active on "+act.name+" — open your panel";
-   }else if(checkout){buy.textContent="Subscribe — $7.99/mo";buy.href=checkout;}
-   else{buy.textContent="Open panel";buy.href="/panel";}
+     document.getElementById("heroStatus").textContent="✓ You're subscribed on "+act.name+" — open your panel";
+   }else if(gs.length){
+     buy.textContent=(pub.stripe?"Subscribe — $7.99/mo":"Open panel");buy.href=checkout;
+     document.getElementById("heroStatus").textContent="You're logged in — subscribe to unlock your server";
+   }else{
+     buy.textContent="➕ Add the bot";buy.href="/invite";
+     document.getElementById("heroStatus").textContent="You're logged in — add the bot to your server to start";
+   }
  }else{
    nav.textContent="Log in";nav.href="/login";
-   if(checkout){buy.textContent="Subscribe — $7.99/mo";buy.href="/login";}
-   else{buy.textContent="Start free trial";buy.href="/login";}
+   buy.textContent="Log in to start";buy.href="/login";
  }
 }).catch(function(){});
 </script>
@@ -2598,6 +2621,7 @@ async def start_web_server() -> None:
             _aioweb.get("/terms", _h_terms),
             _aioweb.get("/privacy", _h_privacy),
             _aioweb.get("/pricing", _h_landing),
+            _aioweb.get("/invite", _h_invite),
             _aioweb.get("/billing/checkout", _h_billing_checkout),
             _aioweb.get("/billing/success", _h_billing_success),
             _aioweb.post("/billing/webhook", _h_billing_webhook),
@@ -3115,7 +3139,7 @@ async function boot(){
   if(!me.authed){
     var pricing='<a href="/pricing"><button class="ghost">💳 Pricing</button></a>';
     if(me.reason==="not_configured") gate("⚙️","Setup needed","The owner still needs to set DISCORD_CLIENT_SECRET and a Website access role before anyone can log in.",inviteBtn()+pricing);
-    else if(me.reason==="no_access") gate("🚫","No access","You don't have the website-access role yet. Ask leadership to give it to you, then reload this page.",'<a href="/logout"><button>Log out</button></a>'+inviteBtn());
+    else if(me.reason==="no_access") gate("➕","Add your server","You're logged in! Now add Gang Manager to a server you own — you'll get a 7-day free trial automatically. Already added it? Reload.",'<a href="/invite"><button class="discordbtn">➕ Add to Discord</button></a><button onclick="boot()">↻ Reload</button><a href="/logout"><button>Log out</button></a>');
     else gate("","Gang Manager","Log in with Discord to manage the roster, stash, KOS, strikes and more.",'<a href="/login"><button class="discordbtn">'+DSVG+' Log in with Discord</button></a>'+inviteBtn()+pricing);
     return;
   }
