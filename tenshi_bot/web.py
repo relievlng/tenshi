@@ -1469,26 +1469,34 @@ def _sub_public(gid: int) -> dict:
     }
 
 
+def _json_nostore(payload):
+    # dynamic auth state must never be cached by the browser
+    return _aioweb.json_response(payload, headers={"Cache-Control": "no-store, max-age=0"})
+
+
 async def _h_me(request):
     brand = _brand_info()
     cfg = _public_cfg()
     if not _configured():
-        return _aioweb.json_response({"authed": False, "reason": "not_configured", "brand": brand, "public": cfg})
+        log.info("/api/me -> not_configured")
+        return _json_nostore({"authed": False, "reason": "not_configured", "brand": brand, "public": cfg})
     uid = _read_session(request.cookies.get(_COOKIE))
     if not uid:
-        return _aioweb.json_response({"authed": False, "reason": "login", "brand": brand, "public": cfg})
-    guilds = await _accessible_guilds(uid)
-    profile = _cached_profile(uid)
-    servers = _server_picker(uid, {str(g.id) for g in guilds})
-    if not guilds:
-        return _aioweb.json_response(
-            {
+        log.info("/api/me -> login (no/invalid session cookie)")
+        return _json_nostore({"authed": False, "reason": "login", "brand": brand, "public": cfg})
+    try:
+        guilds = await _accessible_guilds(uid)
+        profile = _cached_profile(uid)
+        servers = _server_picker(uid, {str(g.id) for g in guilds})
+        if not guilds:
+            log.info("/api/me uid=%s -> no_access (servers=%s)", uid,
+                     "none" if servers is None else len(servers))
+            return _json_nostore({
                 "authed": False, "reason": "no_access", "brand": brand, "public": cfg,
                 "user": profile, "servers": servers, "move_from": _movable_sub_for(uid),
-            }
-        )
-    return _aioweb.json_response(
-        {
+            })
+        log.info("/api/me uid=%s -> authed (guilds=%d, owner=%s)", uid, len(guilds), is_owner(uid))
+        return _json_nostore({
             "authed": True,
             "brand": brand,
             "public": cfg,
@@ -1504,8 +1512,12 @@ async def _h_me(request):
                 }
                 for g in guilds
             ],
-        }
-    )
+        })
+    except Exception as exc:  # noqa: BLE001 — surface, never 500 the panel into a blank
+        log.exception("/api/me failed for uid=%s: %s", uid, exc)
+        return _json_nostore(
+            {"authed": False, "reason": "error", "brand": brand, "public": cfg, "error": str(exc)}
+        )
 
 
 async def _h_access(request):
