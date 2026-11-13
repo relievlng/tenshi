@@ -1248,14 +1248,15 @@ async def _h_callback(request):
     user = await _oauth_user(token)
     if not user or not user.get("id"):
         return _aioweb.Response(text="Couldn't read your Discord account.", status=400)
-    guilds = await _accessible_guilds(user["id"])
-    if not guilds:
-        return _aioweb.Response(text=_DENIED_HTML, status=403, content_type="text/html")
-    uname = user.get("global_name") or user.get("username") or str(user.get("id"))
-    for g in guilds:
+    # Sign them in even if they have no accessible server yet — the panel's
+    # onboarding (add the bot → free trial → subscribe) takes over from there,
+    # instead of a dead-end "No access" page that blocks buying a plan.
+    uid = user["id"]
+    uname = user.get("global_name") or user.get("username") or str(uid)
+    for g in await _accessible_guilds(uid):
         try:
             gstore = guild_store(DATA, g.id)
-            gm = g.get_member(int(user["id"]))
+            gm = g.get_member(int(uid))
             await send_log(
                 g, gstore, f"🌐 **{uname}** signed in to the website.",
                 category="web", actor=gm,
@@ -3348,7 +3349,7 @@ async function boot(){
   if(!me.authed){
     var pricing='<a href="/pricing"><button class="ghost">💳 Pricing</button></a>';
     if(me.reason==="not_configured") gate("⚙️","Setup needed","The owner still needs to set DISCORD_CLIENT_SECRET before anyone can log in.",inviteBtn()+pricing);
-    else if(me.reason==="no_access") gate("➕","Add your server","You're logged in! Now add Gang Manager to a server you own — you'll get a 7-day free trial automatically. Already added it? Reload.",'<a href="/invite"><button class="discordbtn">➕ Add to Discord</button></a><button onclick="boot()">↻ Reload</button><a href="/logout"><button>Log out</button></a>');
+    else if(me.reason==="no_access") gate("➕","Add your server","You're logged in! Add Gang Manager to a server you own to get started — you get a 7-day free trial, then you can subscribe here. Already added it? Reload.",'<a href="/invite"><button class="discordbtn">➕ Add to Discord</button></a><button onclick="boot()">↻ Reload</button><a href="/logout"><button>Log out</button></a>');
     else gate("","Gang Manager","Log in with Discord to manage the roster, stash, KOS, strikes and more.",'<a href="/login"><button class="discordbtn">'+DSVG+' Log in with Discord</button></a>'+inviteBtn()+pricing);
     return;
   }
