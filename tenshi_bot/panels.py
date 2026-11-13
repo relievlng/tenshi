@@ -130,6 +130,7 @@ async def role_menu_post(
         "unselected will be removed.",
         color=EMBED_COLOR,
     )
+    _hero(embed)
     _brand(embed, interaction.guild)
     await _send_card(interaction.channel, [embed], lambda: SelfRoleView(options))
     await interaction.response.send_message("Role menu posted. ✅", ephemeral=True)
@@ -354,9 +355,9 @@ async def eoi_post(
         "the current members of the gang vote on every application.",
         color=EMBED_COLOR,
     )
-    logo = interaction.client.user.display_avatar.url if interaction.client.user else None
-    if logo:
-        embed.set_thumbnail(url=logo)
+    if interaction.guild is not None and interaction.guild.icon:
+        embed.set_thumbnail(url=interaction.guild.icon.url)
+    _hero(embed)
     embed.add_field(
         name="How it works",
         value=(
@@ -402,15 +403,15 @@ class EOIPromptView(discord.ui.View):
 # ---- /gang_help ------------------------------------------------------------- #
 
 _HELP_PAGES: dict[str, tuple[str, str, str]] = {
-    "home": ("🏠", "Tenshi — Command Guide",
+    "home": ("🏠", "Gang Manager — Command Guide",
              "**Pick a category below** to see its commands.\n\n"
              "**Quick start**\n"
-             "1️⃣ `/settings view` — point me at your channels & roles\n"
+             "1️⃣ Open the **web panel → ⚙️ Settings** — channels, roles and logs in one place\n"
              "2️⃣ `/roster import_roles` — your ranks from your server roles\n"
              "3️⃣ `/ticket type_add` → `/ticket panel` — open for orders\n"
              "4️⃣ `/eoi_post` — put up the Apply panel for recruits\n"
              "5️⃣ `/gang dashboard` — your live command center"),
-    "gang": ("🐉", "Gang",
+    "gang": ("👑", "Gang",
              "`/gang dashboard` — live command center with graphs + 🔄 refresh\n"
              "`/gang profile [@member]` — rank, KOS, strikes, tickets\n"
              "`/strike add` · `list` · `remove` · `clear` · `limit`\n"
@@ -439,18 +440,20 @@ _HELP_PAGES: dict[str, tuple[str, str, str]] = {
                   "Members vote ✅/❌ · ⏱️ auto 24h timer (leadership can change) · vouch runs by DM\n"
                   "`/radio new` · `view` · `panel` — rolling gang frequency\n"
                   "`/role_menu add` · `remove` · `list` · `post` — self-serve roles"),
-    "settings": ("⚙️", "Settings",
+    "settings": ("⚙️", "Settings & Website",
+                 "**Easiest:** the web panel's **⚙️ Settings** tab sets everything from dropdowns\n"
                  "`/settings view` — setup progress, everything set, 🩺 health check\n"
                  "`/settings channel` · `/settings role` — set one (leave empty to clear)\n"
-                 "`/settings logs #channel` — send every log type to one channel"),
+                 "`/settings logs #channel` — every log type to one channel\n"
+                 "`/settings logs_setup` — auto-create a channel for every log type\n"
+                 "`/subscription status` — this server's plan and paid-until date"),
 }
 
 
-def _help_embed(key: str, guild: discord.Guild | None, avatar_url: str | None) -> discord.Embed:
+def _help_embed(key: str, guild: discord.Guild | None, avatar_url: str | None = None) -> discord.Embed:
     emoji, title, body = _HELP_PAGES.get(key, _HELP_PAGES["home"])
     e = discord.Embed(title=f"{emoji}  {title}", description=body, color=EMBED_COLOR)
-    if avatar_url:
-        e.set_thumbnail(url=avatar_url)
+    _hero(e)  # the GM banner brands every page of the guide
     _brand(e, guild, "Staff commands need the leadership role or admin")
     return e
 

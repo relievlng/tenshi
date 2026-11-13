@@ -956,6 +956,7 @@ def _build_ticket_panel(guild, store, message: str | None = None):
         )
     if getattr(guild, "icon", None):
         embed.set_thumbnail(url=guild.icon.url)
+    _hero(embed)
     _brand(embed, guild, "Tickets are private · one click to open")
     return embed, options
 

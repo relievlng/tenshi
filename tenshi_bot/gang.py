@@ -481,7 +481,7 @@ def _dashboard_cards(guild: discord.Guild, store: dict[str, Any]) -> list[discor
     )
 
     hq = discord.Embed(
-        title=f"🐉  {guild.name} — Command Center",
+        title=f"👑  {guild.name} — Command Center",
         description=f"-# 🟢 Live · updated <t:{now}:R> · {guild.member_count or len(guild.members)} in server",
         color=EMBED_COLOR,
     )
@@ -494,6 +494,8 @@ def _dashboard_cards(guild: discord.Guild, store: dict[str, Any]) -> list[discor
     hq.add_field(name="📻 Radio", value=f"`{store.get('radio_freq') or '—'}`")
     if guild.banner:
         hq.set_image(url=guild.banner.url)
+    else:
+        _hero(hq)
 
     daily = _daily_counts([o["created_ts"] for o in orders if o.get("created_ts")])
     ops = discord.Embed(

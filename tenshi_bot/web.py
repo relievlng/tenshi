@@ -1227,6 +1227,7 @@ _ASSETS = {
     "/gm-icon.png": ("gm-icon.png", "image/png"),
     "/apple-touch-icon.png": ("gm-icon.png", "image/png"),
     "/gm-og.png": ("gm-og.png", "image/png"),
+    "/gm-banner.png": ("gm-banner.png", "image/png"),
     "/favicon.ico": ("favicon.ico", "image/x-icon"),
 }
 _ASSET_CACHE: dict[str, bytes] = {}
@@ -2418,70 +2419,6 @@ async def sync_subscriptions_from_stripe() -> int:
 
 # ---- pricing / invite landing ---------------------------------------------- #
 
-def _pricing_page(request) -> str:
-    invite = _invite_url()
-    plan = _plan_public()
-    stripe_on = _stripe_ready()
-    sub_note = (
-        "Pick your server and start a subscription below."
-        if stripe_on
-        else "Add the bot and start your free trial — subscriptions open soon."
-    )
-    buy_block = (
-        "<a class='btn primary' href='/billing/checkout'>Subscribe — " + plan["price"] + "</a>"
-        if stripe_on
-        else "<span class='btn disabled' title='The owner is finishing payment setup'>Subscriptions opening soon</span>"
-    )
-    invite_block = (
-        f"<a class='btn' href='{invite}' target='_blank' rel='noopener'>➕ Add to Discord</a>"
-        if invite
-        else "<span class='btn disabled'>Invite link unavailable</span>"
-    )
-    return (
-        "<!doctype html><html lang=en><head><meta charset=utf-8>"
-        "<meta name=viewport content='width=device-width,initial-scale=1'>"
-        "<title>Gang Manager · Pricing</title><style>"
-        "*{box-sizing:border-box}"
-        "body{margin:0;min-height:100vh;color:#ececf1;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
-        "background:linear-gradient(150deg,#050507 0%,#0e0e12 46%,#4a4a52 80%,#ededf2 100%) fixed;"
-        "display:flex;align-items:center;justify-content:center;padding:40px 18px}"
-        ".card{max-width:440px;width:100%;background:rgba(10,10,14,.72);border:1px solid rgba(255,255,255,.12);"
-        "border-radius:22px;padding:34px 30px;backdrop-filter:blur(8px);box-shadow:0 30px 80px rgba(0,0,0,.5)}"
-        ".logo{display:block;margin:0 auto 14px;width:92px;height:56px;object-fit:contain}"
-        "h1{font-size:26px;margin:0 0 4px;text-align:center}"
-        ".sub{color:#b8b8c2;text-align:center;margin:0 0 22px;font-size:14px}"
-        ".price{text-align:center;margin:18px 0}"
-        ".price b{font-size:40px}.price span{color:#9a9aa6}"
-        "ul{list-style:none;padding:0;margin:18px 0;font-size:14px}"
-        "li{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}li:before{content:'✓ ';color:#8ad18a}"
-        ".btn{display:block;text-align:center;padding:13px 16px;margin:10px 0;border-radius:12px;font-weight:650;"
-        "text-decoration:none;color:#0a0a0c;background:#ededf2;transition:transform .08s}"
-        ".btn:hover{transform:translateY(-1px)}"
-        ".btn.primary{background:linear-gradient(90deg,#c9c9d2,#ffffff);color:#0a0a0c}"
-        ".btn:not(.primary):not(.disabled){background:rgba(255,255,255,.1);color:#ececf1;border:1px solid rgba(255,255,255,.18)}"
-        ".btn.disabled{background:rgba(255,255,255,.06);color:#777;cursor:not-allowed}"
-        ".foot{text-align:center;margin-top:18px;font-size:12px;color:#8a8a94}"
-        ".foot a{color:#c9c9d2}"
-        "</style></head><body><div class=card>"
-        "<img class=logo src='/gm-logo.png' alt='GM'>"
-        "<h1>Gang Manager</h1>"
-        f"<p class=sub>{sub_note}</p>"
-        f"<div class=price><b>{plan['price'].split(' /')[0]}</b> <span>/ {plan['label'].lower()}</span></div>"
-        "<ul><li>Full roster, KOS, strikes &amp; wars</li>"
-        "<li>Ticket &amp; order system</li>"
-        "<li>EOI recruitment with voting</li>"
-        "<li>Web control panel &amp; live logs</li></ul>"
-        f"{buy_block}{invite_block}"
-        "<div class=foot><a href='/'>Open the panel</a> · <a href='/terms'>Terms</a> · <a href='/privacy'>Privacy</a>"
-        " · made by pmxl</div>"
-        "</div></body></html>"
-    )
-
-
-async def _h_pricing(request):
-    return _aioweb.Response(text=_pricing_page(request), content_type="text/html")
-
-
 async def _h_invite(request):
     """Login-gated bot invite. Only a signed-in user can add the bot; they land
     back on the panel afterward. The bot itself still enforces the subscription
@@ -2757,7 +2694,7 @@ h1 .g{background-size:200% 100%;animation:sheen 6s ease-in-out infinite}
       <div class=dcol>
         <div class=dname>Gang Manager <span class=dbot>APP</span><time>Today at 9:41 PM</time></div>
         <div class=demb style="--c:#23a55a">
-          <b>⚔️ War · Tenshi vs Night Riders</b>
+          <b>⚔️ War · Black Lotus vs Night Riders</b>
           <div class=dscore>5 <span>—</span> 3</div>
           <div class=dbar><i style="width:62%"></i></div>
           <div class=dsmall>Win rate 62% · first to 7</div>
@@ -4424,7 +4361,7 @@ async function closeEoi(id,name){
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 async function acceptEoi(id,name){
-  if(!confirm("Force-accept "+name+"? They'll be welcomed and given the Tenshi role regardless of the votes."))return;
+  if(!confirm("Force-accept "+name+"? They'll be welcomed and given the member role regardless of the votes."))return;
   try{await post("/api/eoi_accept",{guild:STATE.guild,msg_id:id});toast("Accepted "+name,"ok");await reload();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
@@ -4447,7 +4384,7 @@ function renderOrders(){
   const typesPanel=`<div class="ocard oform" id="otypes" style="display:none">
     <div style="font-weight:700">Order types <span class="muted" style="font-weight:400;font-size:12px">— what people can open from the panel</span></div>
     <div class="tlist">${typeRows}</div>
-    <div class="ofrow"><input id="tt_emoji" placeholder="🎫" maxlength="8" style="max-width:72px;text-align:center"><input id="tt_name" placeholder="New type name — e.g. Tenshi Vendor or P90s Order"><button class="brand-btn" onclick="addTicketType()">Add type</button></div>
+    <div class="ofrow"><input id="tt_emoji" placeholder="🎫" maxlength="8" style="max-width:72px;text-align:center"><input id="tt_name" placeholder="New type name — e.g. Weapons Vendor or P90s Order"><button class="brand-btn" onclick="addTicketType()">Add type</button></div>
     <div class="muted" style="font-size:11.5px">After changes, run <b>/ticket panel</b> in Discord to repost the open menu.</div></div>`;
   const closedN=all.filter(o=>o.status!=="open").length;
   const clearBtn=closedN?`<button class="ghost" onclick="clearClosedOrders(${closedN})">🧹 Clear ${closedN} closed</button>`:"";

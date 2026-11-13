@@ -51,7 +51,7 @@ try:
 except ValueError:
     TRIAL_DAYS = 0
 
-EMBED_COLOR = 0xE11D48  # deep red, fits the "gang" vibe
+EMBED_COLOR = 0xC9C9D2  # GM silver — the brand accent for neutral cards
 
 # --------------------------------------------------------------------------- #
 # Palette — one source of truth for every embed colour.
@@ -296,13 +296,54 @@ def _site_url() -> str:
     return base.rstrip("/")
 
 
+_HERO_BANNER = "gm-banner.png"
+
+
+def _gm_icon_url() -> str | None:
+    site = _site_url()
+    return f"{site}/gm-icon.png" if site else None
+
+
+def _hero(embed: discord.Embed) -> discord.Embed:
+    """Mark a card as a hero panel (ticket panel, apply, help, dashboard…): it
+    gets the GM banner across the top. Needs the site URL so Discord can load
+    the image; without one the card simply renders without the banner."""
+    site = _site_url()
+    if site:
+        embed.set_image(url=f"{site}/{_HERO_BANNER}")
+    return embed
+
+
+def _quote(text: str) -> str:
+    """Markdown blockquote, line by line — gives stat blocks their own panel."""
+    return "\n".join(f"> {line}" if line.strip() else ">" for line in str(text).split("\n"))
+
+
 def _embed_container(embed: discord.Embed) -> "discord.ui.Container":
-    """Render a classic embed as a Components V2 container: big header (with the
-    thumbnail beside it), body, inline fields packed into a grid-ish block,
-    full-width fields as sub-headings, and the footer as small print."""
+    """Render a classic embed as a Components V2 card — one consistent look for
+    the whole bot:
+
+      [hero banner]                       (hero panels only)
+      -# author
+      ## Title                            [thumbnail · GM mark by default]
+      description
+      ─────────────
+      > **Stat** · value                  (inline fields, as one quoted panel)
+      ### Section                         (full-width fields)
+      [image]
+      ─────────────
+      -# ✦ footer · 2 minutes ago         (relative time when timestamped)
+    """
     container = discord.ui.Container(
         accent_colour=embed.colour or discord.Colour(EMBED_COLOR)
     )
+    image = embed.image.url if embed.image and embed.image.url else None
+    hero = bool(image and image.endswith("/" + _HERO_BANNER))
+    if hero:
+        container.add_item(
+            discord.ui.MediaGallery(discord.MediaGalleryItem(image, description="Gang Manager"))
+        )
+
     head_parts = []
     if embed.author and embed.author.name:
         head_parts.append(f"-# {embed.author.name}")
@@ -312,6 +353,8 @@ def _embed_container(embed: discord.Embed) -> "discord.ui.Container":
         head_parts.append(embed.description)
     head_txt = "\n".join(head_parts) or "​"
     thumb = embed.thumbnail.url if embed.thumbnail and embed.thumbnail.url else None
+    if not thumb and embed.title and not hero:
+        thumb = _gm_icon_url()  # the GM mark on every titled card
     if thumb:
         container.add_item(
             discord.ui.Section(
@@ -323,12 +366,12 @@ def _embed_container(embed: discord.Embed) -> "discord.ui.Container":
         container.add_item(discord.ui.TextDisplay(head_txt[:3900]))
 
     if embed.fields:
-        container.add_item(discord.ui.Separator())
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.small))
         inline_buf: list[str] = []
 
         def flush() -> None:
             if inline_buf:
-                container.add_item(discord.ui.TextDisplay("\n".join(inline_buf)[:3900]))
+                container.add_item(discord.ui.TextDisplay(_quote("\n".join(inline_buf))[:3900]))
                 inline_buf.clear()
 
         for f in embed.fields:
@@ -339,13 +382,16 @@ def _embed_container(embed: discord.Embed) -> "discord.ui.Container":
                 container.add_item(discord.ui.TextDisplay(f"### {f.name}\n{f.value}"[:3900]))
         flush()
 
-    if embed.image and embed.image.url:
-        container.add_item(
-            discord.ui.MediaGallery(discord.MediaGalleryItem(embed.image.url))
-        )
-    if embed.footer and embed.footer.text:
-        container.add_item(discord.ui.Separator(visible=False))
-        container.add_item(discord.ui.TextDisplay(f"-# {embed.footer.text}"))
+    if image and not hero:
+        container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(image)))
+
+    foot = embed.footer.text if embed.footer and embed.footer.text else ""
+    if embed.timestamp:
+        stamp = f"<t:{int(embed.timestamp.timestamp())}:R>"
+        foot = f"{foot} · {stamp}" if foot else stamp
+    if foot:
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.small))
+        container.add_item(discord.ui.TextDisplay(f"-# ✦ {foot}"[:3900]))
     return container
 
 
@@ -609,7 +655,11 @@ async def send_log(
         color=color,
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
-    embed.set_author(name=f"{emoji} {label}")
+    gm = _gm_icon_url()
+    if gm:
+        embed.set_author(name=f"{emoji} {label}", icon_url=gm)
+    else:
+        embed.set_author(name=f"{emoji} {label}")
     if actor is not None:
         embed.add_field(
             name="Member", value=f"{actor.mention}\n`{actor}` · `{actor.id}`", inline=True

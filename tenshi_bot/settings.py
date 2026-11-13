@@ -68,7 +68,7 @@ def _settings_health(guild: discord.Guild, store: dict[str, Any]) -> list[str]:
         label, skey, _ = CONFIG_SETTINGS[key]
         role = guild.get_role(store.get(skey) or 0)
         if role is not None and me is not None and me.top_role <= role:
-            issues.append(f"{_SETTING_EMOJI[key]} Drag **Tenshi** above {role.mention} so I can hand it out")
+            issues.append(f"{_SETTING_EMOJI[key]} Drag my role ({me.top_role.mention}) above {role.mention} so I can hand it out")
     for key in ("eoi_channel", "staff_channel", "transcript_channel"):
         if not store.get(CONFIG_SETTINGS[key][1]):
             issues.append(f"{_SETTING_EMOJI[key]} **{CONFIG_SETTINGS[key][0]}** isn't set yet")
@@ -89,7 +89,7 @@ def _settings_cards(guild: discord.Guild, store: dict[str, Any], avatar: str | N
     )
     total = len(CONFIG_SETTINGS)
     head = discord.Embed(
-        title="⚙️  Tenshi — Setup",
+        title="⚙️  Gang Manager — Setup",
         description=f"**Setup progress**\n`{_bar(done, total, 18)}` **{done}/{total}** configured",
         color=EMBED_COLOR,
     )

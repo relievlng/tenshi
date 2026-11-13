@@ -44,10 +44,10 @@ bot.tree.interaction_check = subscription_gate
 
 @bot.listen("on_interaction")
 async def _trace_interaction(interaction: discord.Interaction) -> None:
-    # slim trace: confirm component clicks arrive and with what custom_id
+    # slim trace (debug level): which component was clicked, by whom
     if interaction.type == discord.InteractionType.component:
         data = interaction.data or {}
-        log.info(
+        log.debug(
             "component: custom_id=%s user=%s", data.get("custom_id"), interaction.user
         )
 
