@@ -319,7 +319,7 @@ def _quote(text: str) -> str:
     return "\n".join(f"> {line}" if line.strip() else ">" for line in str(text).split("\n"))
 
 
-def _embed_container(embed: discord.Embed) -> "discord.ui.Container":
+def _embed_container(embed: discord.Embed, rows: "list | None" = None) -> "discord.ui.Container":
     """Render a classic embed as a Components V2 card — one consistent look for
     the whole bot:
 
@@ -331,6 +331,8 @@ def _embed_container(embed: discord.Embed) -> "discord.ui.Container":
       > **Stat** · value                  (inline fields, as one quoted panel)
       ### Section                         (full-width fields)
       [image]
+      ─────────────
+      [buttons / menus]                   (`rows`: the card's own controls)
       ─────────────
       -# ✦ footer · 2 minutes ago         (relative time when timestamped)
     """
@@ -384,6 +386,11 @@ def _embed_container(embed: discord.Embed) -> "discord.ui.Container":
 
     if image and not hero:
         container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(image)))
+
+    if rows:
+        container.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.small))
+        for row in rows:
+            container.add_item(row)
 
     foot = embed.footer.text if embed.footer and embed.footer.text else ""
     if embed.timestamp:
@@ -447,22 +454,21 @@ def _v2_layout(
     layout = layout_cls(timeout=None)
     if header:
         layout.add_item(discord.ui.TextDisplay(header))
-    for e in embeds:
-        layout.add_item(_embed_container(e))
+
+    rows: list = []
     if view is not None:
-        items = list(view.children)
         buf: list = []
 
         def flush() -> None:
             if buf:
-                layout.add_item(discord.ui.ActionRow(*buf))
+                rows.append(discord.ui.ActionRow(*buf))
                 buf.clear()
 
         last_row = object()
-        for item in items:
+        for item in list(view.children):
             if getattr(item, "width", 1) >= 5:  # menus take a whole row
                 flush()
-                layout.add_item(discord.ui.ActionRow(item))
+                rows.append(discord.ui.ActionRow(item))
                 last_row = object()
                 continue
             if buf and (len(buf) == 5 or (item.row is not None and item.row != last_row)):
@@ -470,6 +476,15 @@ def _v2_layout(
             buf.append(item)
             last_row = item.row
         flush()
+
+    # Buttons/menus live INSIDE the last card (above its footer) — one clean
+    # unit. Built before the card joins the layout, so every item is registered.
+    for i, e in enumerate(embeds):
+        last = i == len(embeds) - 1
+        layout.add_item(_embed_container(e, rows if last else None))
+    if not embeds:
+        for row in rows:  # no card to hold them (header-only messages)
+            layout.add_item(row)
     return layout
 
 
@@ -667,6 +682,10 @@ async def send_log(
 ) -> None:
     """Post a categorized, detailed audit entry to the log channel, if one is set.
 
+    Renders as a card: category tag + what happened (with the actor's avatar
+    beside it), a quoted detail panel, and a live "x minutes ago" footer. The
+    accent colour is the category's. Mentions never ping from a log.
+
     `fields` is a list of (name, value, inline) tuples for extra detail.
     `channel_ctx` adds a 'Channel' field pointing at where the action happened.
     """
@@ -684,23 +703,19 @@ async def send_log(
         color=color,
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
-    gm = _gm_icon_url()
-    if gm:
-        embed.set_author(name=f"{emoji} {label}", icon_url=gm)
-    else:
-        embed.set_author(name=f"{emoji} {label}")
+    embed.set_author(name=f"{emoji}  {label.upper()}", icon_url=_gm_icon_url())
     if actor is not None:
-        embed.add_field(
-            name="Member", value=f"{actor.mention}\n`{actor}` · `{actor.id}`", inline=True
-        )
+        avatar = getattr(getattr(actor, "display_avatar", None), "url", None)
+        if avatar:
+            embed.set_thumbnail(url=avatar)
+        embed.add_field(name="By", value=f"{actor.mention} · `{actor.id}`", inline=True)
+        embed.set_footer(text=str(actor))
     if channel_ctx is not None:
         embed.add_field(name="Channel", value=channel_ctx.mention, inline=True)
     for name, value, inline in fields or []:
-        embed.add_field(name=name, value=value or "—", inline=inline)
-    if actor is not None:
-        embed.set_footer(text=str(actor), icon_url=actor.display_avatar.url)
+        embed.add_field(name=name, value=(value or "—")[:1024], inline=inline)
     try:
-        await channel.send(embed=embed)
+        await _send_card(channel, [embed])
     except discord.HTTPException:
         pass
 
@@ -802,11 +817,19 @@ class EOIView(GatedView):
     restart.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, yes: int | None = None, no: int | None = None) -> None:
         super().__init__(timeout=None)
         # message_id -> {user_id: "yes"|"no"}
         # kept on the view instance; re-registered on startup
         self.votes: dict[int, dict[int, str]] = {}
+        if yes is not None or no is not None:
+            # live tally right on the buttons: "Yes · 4" / "No · 1"
+            for c in self.children:
+                cid = getattr(c, "custom_id", None)
+                if cid == "eoi:yes":
+                    c.label = f"Yes · {yes or 0}"
+                elif cid == "eoi:no":
+                    c.label = f"No · {no or 0}"
 
     def _tally(self, message_id: int) -> tuple[int, int]:
         record = self.votes.get(message_id, {})
@@ -850,7 +873,7 @@ class EOIView(GatedView):
 
         embed = msg.embeds[0] if msg.embeds else discord.Embed()
         embed.set_footer(text=f"✅ {yes}   •   ❌ {no}")
-        await msg.edit(embed=embed, view=EOIView())
+        await msg.edit(embed=embed, view=EOIView(yes, no))
 
         if previous == choice:
             note = f"Your **{choice.upper()}** vote is already counted."
@@ -941,7 +964,7 @@ class EOIView(GatedView):
         save_data(DATA)
         embed = msg.embeds[0] if msg.embeds else discord.Embed()
         _set_embed_field(embed, _EOI_TIMER_FIELD, f"<t:{ends}:R> · <t:{ends}:f>")
-        await msg.edit(embed=embed, view=EOIView())
+        await msg.edit(embed=embed, view=_eoi_view(store, msg.id))
         await interaction.followup.send(f"⏱️ Voting closes <t:{ends}:R>.", ephemeral=True)
         await send_log(
             interaction.guild, store, f"⏱️ EOI voting timer set — closes <t:{ends}:R>.",
@@ -951,6 +974,14 @@ class EOIView(GatedView):
 
 # single shared view instance so vote state is consistent
 EOI_VIEW = EOIView()
+
+
+def _eoi_view(store: dict[str, Any], message_id: int) -> EOIView:
+    """Voting buttons showing this EOI's current tally."""
+    votes = store.get("eoi_votes", {}).get(str(message_id), {})
+    yes = sum(1 for v in votes.values() if v == "yes")
+    no = sum(1 for v in votes.values() if v == "no")
+    return EOIView(yes, no)
 
 
 # --------------------------------------------------------------------------- #
@@ -1140,7 +1171,7 @@ class EOIModal(discord.ui.Modal, title="Join the Gang — Expression of Interest
             if ping_role
             else None,
             embed=embed,
-            view=EOIView(),
+            view=EOIView(0, 0),
             allowed_mentions=discord.AllowedMentions(roles=True, users=False),
         )
         store.setdefault("eoi_apps", {})[str(posted.id)] = {
@@ -1388,7 +1419,7 @@ async def _handle_vouch_decision(
                     inline=True,
                 )
                 voting_done = store.get("eoi_timers", {}).get(str(msg_id), {}).get("done")
-                await eoi_msg.edit(embed=e, view=None if voting_done else EOIView())
+                await eoi_msg.edit(embed=e, view=None if voting_done else _eoi_view(store, msg_id))
         except discord.HTTPException:
             pass
 
@@ -1464,7 +1495,7 @@ async def _request_vouch(
     try:
         e = eoi_msg.embeds[0]
         _set_embed_field(e, _EOI_VOUCH_FIELD, f"⏳ Pending — {voucher.mention}", inline=True)
-        await eoi_msg.edit(embed=e, view=EOIView())
+        await eoi_msg.edit(embed=e, view=_eoi_view(store, eoi_msg.id))
     except (discord.HTTPException, IndexError):
         pass
     return True

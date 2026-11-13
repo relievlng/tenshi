@@ -36,7 +36,7 @@ All channel/role settings live in `/settings`. Staff commands need the leadershi
 | `/ticket board` | Active orders grouped by type, paid/unpaid | Staff |
 | `/close [reason]` | Close the ticket you're in — the reason and how long it was open go in the transcript, the customer's DM and the log | Staff or ticket owner |
 | `/ticket add @member` / `/ticket remove @member` | Let someone into the ticket you're in, or take them out | Staff |
-| `/ticket stats` | Open/closed/paid counts, tickets-per-day graph, average time open, and a staff leaderboard | Staff |
+| `/ticket stats` | Open/closed/paid counts, tickets-per-day graph, average time open, the average ⭐ customer rating, and a staff leaderboard (with each person's rating) | Staff |
 | `/ticket autoclose <hours>` | Warn then auto-close tickets with no messages for that long (0 = off) | Leadership |
 | (in ticket) 🚩 Priority | Cycle Low → Normal → High → Urgent; the board sorts urgent first | Staff |
 | (after close) DM | Customer gets one short DM (ticket #, paid, time open, items, reason) with the chat log attached; staff get the full HTML + text transcript | Customer |
@@ -112,6 +112,7 @@ All channel/role settings live in `/settings`. Staff commands need the leadershi
 | `SUPPORT_URL` | no | — | A contact link (e.g. your Discord invite) shown when online payments aren't set up |
 | `TRIAL_DAYS` | no | `0` | Optional free-trial length in days when the bot joins a new server (0 = no trial; the default is monthly-sub only) |
 | `INVITE_PERMISSIONS` | no | sensible set | Override the permission integer on the "Add to Discord" invite link |
+| `BOT_STATUS` | no | — | A line of your own for the bot's status. It's pinned to the front of the live rotation (gangs running, members, active wars, open tickets, `/gang_help`, website), which changes every 30s |
 | `STRIPE_SECRET_KEY` | no | — | Stripe secret key — turns on the Subscribe button (real monthly billing) |
 | `STRIPE_PRICE_ID` | no | — | The Stripe recurring Price to sell (e.g. `price_123`) |
 | `STRIPE_WEBHOOK_SECRET` | no | — | Stripe webhook signing secret (`whsec_…`) so payments auto-activate/expire servers |

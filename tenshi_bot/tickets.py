@@ -81,61 +81,88 @@ def _prio_label(order: dict[str, Any] | None) -> str:
     return dict(PRIORITIES).get(key, "🔵 Normal")
 
 
-def _order_embed(order: dict[str, Any]) -> discord.Embed:
+_ORDER_STEPS = ("Opened", "Claimed", "Paid", "Closed")
+
+
+def _order_progress(order: dict[str, Any]) -> str:
+    """🟢 Opened → 🟢 Claimed → ⚪ Paid → ⚪ Closed — fills in as staff work it."""
+    reached = (
+        True,
+        bool(order.get("claimed_by")),
+        bool(order.get("paid")),
+        order.get("status") == "closed",
+    )
+    return "  →  ".join(f"{'🟢' if r else '⚪'} {s}" for s, r in zip(_ORDER_STEPS, reached))
+
+
+def _order_embed(order: dict[str, Any], guild: "discord.Guild | None" = None) -> discord.Embed:
+    """The ticket's one live card: greeting, status panel, items, progress
+    tracker. The accent shows the state at a glance — green once paid, red /
+    amber for urgent / high priority, grey when closed."""
     paid = order.get("paid", False)
     closed = order.get("status", "open") == "closed"
-    color = OK if paid else EMBED_COLOR
+    prio = order.get("priority", "normal")
     ttype = order.get("type") or "Order"
-    status = "🔒 Closed" if closed else ("🟢 Paid" if paid else "🔴 Unpaid")
-
+    uid = order.get("user_id")
     claimed = order.get("claimed_by")
     created = order.get("created_ts")
-    lines = [
-        f"**Customer**  <@{order['user_id']}>",
-        f"**Status**  {status}",
-        f"**Priority**  {_prio_label(order)}",
-        f"**Handled by**  {f'<@{claimed}>' if claimed else '*unclaimed*'}",
-    ]
-    if created:
-        lines.append(f"**Opened**  <t:{created}:R>")
+
+    if closed:
+        color = MUTED
+    elif paid:
+        color = OK
+    elif prio == "urgent":
+        color = BAD
+    elif prio == "high":
+        color = WARN
+    else:
+        color = EMBED_COLOR
+
+    emoji, member = "🎫", None
+    if guild is not None:
+        t = _find_ticket_type(guild_store(DATA, guild.id), ttype)
+        emoji = (t or {}).get("emoji") or "🎫"
+        member = guild.get_member(uid) if uid else None
+
+    if uid:
+        greet = (
+            f"Hey <@{uid}> — thanks for the order! Staff will be with you shortly.\n"
+            "Drop anything else below: prices, timing, drop spot. You'll get the full "
+            "transcript in your DMs when it's closed."
+        )
+    else:
+        greet = "Opened from the website. Staff — bring the customer in with `/ticket add`."
 
     embed = discord.Embed(
-        title=f"{ttype}  ·  Order #{order['id']}",
-        description="\n".join(lines),
+        title=f"{emoji}  {ttype} Order",
+        description=greet,
         color=color,
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
-    embed.add_field(name="Items", value=order.get("guns") or "—", inline=False)
-    embed.add_field(name="Quantity", value=order.get("quantity") or "—", inline=True)
+    embed.set_author(name=f"TICKET #{order['id']}")
+    if member is not None:
+        embed.set_thumbnail(url=member.display_avatar.url)
+
+    status = "🔒 Closed" if closed else ("🟢 Paid" if paid else "🔴 Unpaid")
+    embed.add_field(name="Status", value=status, inline=True)
+    embed.add_field(name="Priority", value=_prio_label(order), inline=True)
+    embed.add_field(name="Handled by", value=f"<@{claimed}>" if claimed else "*unclaimed*", inline=True)
+    if created:
+        embed.add_field(name="Opened", value=f"<t:{created}:R>", inline=True)
+    embed.add_field(name="Quantity", value=(order.get("quantity") or "—")[:1024], inline=True)
+    embed.add_field(name="📦 Items", value=(order.get("guns") or "—")[:1024], inline=False)
     if order.get("notes"):
-        embed.add_field(name="Notes", value=order["notes"], inline=False)
+        embed.add_field(name="📝 Notes", value=order["notes"][:1024], inline=False)
+    embed.add_field(
+        name="📍 Progress",
+        value=f"{_order_progress(order)}\n-# Staff: `/ticket add` · `/close [reason]`",
+        inline=False,
+    )
     return embed
 
 
-def _order_welcome_embed(order: dict[str, Any], guild: discord.Guild) -> discord.Embed:
-    ttype = order.get("type") or "Order"
-    welcome = discord.Embed(
-        description=(
-            f"👋 Thanks for your **{ttype}** order, <@{order['user_id']}>!\n\n"
-            "Staff will be with you shortly. Add anything else you need below — "
-            "prices, timing, drop spot. A staff member will mark it paid once "
-            "sorted, then close the ticket (you'll get a transcript in your DMs)."
-        ),
-        color=EMBED_COLOR,
-    )
-    member = guild.get_member(order["user_id"])
-    if member is not None:
-        welcome.set_author(name=member.display_name, icon_url=member.display_avatar.url)
-    welcome.add_field(
-        name="Staff tools",
-        value="🙋 Claim · 💰 Mark Paid · 🚩 Priority · 🔒 Close · `/ticket add` · `/close [reason]`",
-        inline=False,
-    )
-    return welcome
-
-
 def _order_cards(order: dict[str, Any], guild: discord.Guild) -> list[discord.Embed]:
-    return [_order_welcome_embed(order, guild), _brand(_order_embed(order), guild)]
+    return [_brand(_order_embed(order, guild), guild)]
 
 
 def _orders_board_embed(store: dict[str, Any]) -> discord.Embed:
@@ -443,29 +470,42 @@ async def _close_ticket_core(
                 member = None
         if member is not None:
             dm = discord.Embed(
-                title="🔒  Ticket closed",
-                description=f"Your **{ttype}** ticket in **{guild.name}** is closed. Thanks!",
+                title=f"🔒  Your {ttype} ticket is closed",
+                description=(
+                    f"Thanks for dealing with **{guild.name}**! The full chat log is attached.\n\n"
+                    "**How did we do?** Tap a rating below — it goes straight to the team."
+                ),
                 color=EMBED_COLOR,
                 timestamp=datetime.datetime.now(datetime.timezone.utc),
             )
             dm.add_field(name="Ticket", value=f"#{oid}", inline=True)
-            dm.add_field(name="Paid", value="Yes" if order.get("paid") else "No", inline=True)
+            dm.add_field(name="Paid", value="🟢 Yes" if order.get("paid") else "🔴 No", inline=True)
             if open_for:
                 dm.add_field(name="Open for", value=open_for, inline=True)
+            if order.get("claimed_by"):
+                dm.add_field(name="Handled by", value=f"<@{order['claimed_by']}>", inline=True)
             if order.get("guns"):
                 dm.add_field(name="Items", value=order["guns"][:1024], inline=False)
             if reason:
                 dm.add_field(name="Reason", value=reason[:1024], inline=False)
             if guild.icon:
                 dm.set_author(name=guild.name, icon_url=guild.icon.url)
+                dm.set_thumbnail(url=guild.icon.url)
             else:
                 dm.set_author(name=guild.name)
-            dm.set_footer(text="Full chat log attached")
+            _brand(dm, guild, "Full chat log attached")
             try:
-                await member.send(
+                sent = await member.send(
                     embed=dm,
                     file=discord.File(io.BytesIO(text.encode("utf-8")), filename=f"ticket-{oid}.txt"),
+                    view=RatingView(),
                 )
+                # remember which ticket this DM rates (RatingView looks it up)
+                pending = DATA.setdefault("rating_msgs", {})
+                pending[str(sent.id)] = {"guild_id": guild.id, "order_id": order["id"]}
+                for old in list(pending)[:-500]:  # keep the backlog bounded
+                    pending.pop(old, None)
+                save_data(DATA)
             except discord.HTTPException:
                 pass  # customer has DMs closed
 
@@ -485,13 +525,18 @@ async def _close_ticket_core(
             ],
         )
 
+    gone = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) + 6
+    who = getattr(closer, "display_name", None) or str(closer)
+    bye = discord.Embed(
+        title="🔒  Ticket closed",
+        description=(
+            f"Closed by **{who}**" + (f" — {reason}" if reason else "") + ".\n"
+            f"🧾 Transcript saved · this channel deletes <t:{gone}:R>"
+        ),
+        color=MUTED,
+    )
     try:
-        await channel.send(
-            embed=discord.Embed(
-                description="🔒 **Ticket closed.** Transcript saved — deleting this channel in 5 seconds…",
-                color=EMBED_COLOR,
-            )
-        )
+        await _send_card(channel, [bye])
     except discord.HTTPException:
         pass
     await asyncio.sleep(5)
@@ -731,21 +776,29 @@ async def _reset_panel_select(interaction: discord.Interaction, store: dict) -> 
 
 class OrderTicketView(GatedView):
     """Staff buttons on a ticket: Claim, Mark Paid/Unpaid, Priority and Close.
-    Pass the order so the paid button shows the right label/colour."""
+    Pass the order so the buttons show its state: Claim turns into Take Over once
+    someone has it, Paid flips to Unpaid, Priority wears the current level's
+    colour (🟢 🔵 🟠 🔴) — short labels keep all four on one row."""
 
     def __init__(self, order: dict | None = None) -> None:
         super().__init__(timeout=None)
-        if order is not None:
-            for c in self.children:
-                if getattr(c, "custom_id", None) == "order:paid":
-                    if order.get("paid"):
-                        c.label, c.style, c.emoji = "Mark Unpaid", discord.ButtonStyle.secondary, "↩️"
-                    else:
-                        c.label, c.style, c.emoji = "Mark Paid", discord.ButtonStyle.success, "💰"
+        if order is None:
+            return
+        for c in self.children:
+            cid = getattr(c, "custom_id", None)
+            if cid == "order:paid":
+                if order.get("paid"):
+                    c.label, c.style, c.emoji = "Mark Unpaid", discord.ButtonStyle.secondary, "↩️"
+                else:
+                    c.label, c.style, c.emoji = "Mark Paid", discord.ButtonStyle.success, "💰"
+            elif cid == "order:claim" and order.get("claimed_by"):
+                c.label, c.style, c.emoji = "Take Over", discord.ButtonStyle.secondary, "🔁"
+            elif cid == "order:priority":
+                c.emoji = _prio_label(order).partition(" ")[0]
 
     @discord.ui.button(
         label="Claim",
-        style=discord.ButtonStyle.secondary,
+        style=discord.ButtonStyle.primary,
         emoji="🙋",
         custom_id="order:claim",
     )
@@ -769,8 +822,20 @@ class OrderTicketView(GatedView):
             interaction.message, _order_cards(order, interaction.guild),
             lambda: OrderTicketView(order),
         )
-        verb = "reassigned to" if prev and prev != interaction.user.id else "claimed by"
-        await interaction.channel.send(f"🙋 Ticket {verb} {interaction.user.mention}.")
+        took_over = bool(prev and prev != interaction.user.id)
+        note = discord.Embed(
+            description=(
+                f"{'🔁' if took_over else '🙋'} **{interaction.user.display_name}** "
+                f"{'took over' if took_over else 'claimed'} this ticket.\n"
+                "-# They'll handle it from here."
+            ),
+            color=SKY,
+        )
+        note.set_thumbnail(url=interaction.user.display_avatar.url)
+        try:
+            await _send_card(interaction.channel, [note])
+        except discord.HTTPException:
+            pass
         await interaction.followup.send(
             "You're now handling this ticket. 🙋", ephemeral=True
         )
@@ -1412,6 +1477,11 @@ async def ticket_stats(interaction: discord.Interaction) -> None:
         color=EMBED_COLOR,
     )
     summary.add_field(name="⏱️ Avg time open", value=fmt_dur(sum(durations) / len(durations)) if durations else "—")
+    ratings = [o["rating"] for o in orders if o.get("rating")]
+    summary.add_field(
+        name="⭐ Customer rating",
+        value=f"**{sum(ratings) / len(ratings):.1f}**/5 · {len(ratings)} rated" if ratings else "—",
+    )
     summary.add_field(
         name="📈 Opened per day · last 14d",
         value=f"`{_spark(daily)}`  peak **{max(daily)}**/day · **{sum(daily)}** total",
@@ -1422,16 +1492,23 @@ async def ticket_stats(interaction: discord.Interaction) -> None:
     for o in closed:
         h = o.get("claimed_by")
         if h:
-            b = board.setdefault(h, {"n": 0})
+            b = board.setdefault(h, {"n": 0, "stars": []})
             b["n"] += 1
+            if o.get("rating"):
+                b["stars"].append(o["rating"])
     lb = discord.Embed(title="🏆  Staff Leaderboard", color=WARN)
     if board:
         medals = ["🥇", "🥈", "🥉"]
         ranked = sorted(board.items(), key=lambda kv: -kv[1]["n"])[:10]
         top = ranked[0][1]["n"]
+
+        def stars(b: dict) -> str:
+            s = b["stars"]
+            return f" · ⭐ {sum(s) / len(s):.1f}" if s else ""
+
         lb.description = "\n".join(
             f"{medals[i] if i < 3 else f'`{i + 1}.`'} <@{uid}>\n"
-            f"`{_bar(b['n'], top, 12)}` **{b['n']}** handled"
+            f"`{_bar(b['n'], top, 12)}` **{b['n']}** handled{stars(b)}"
             for i, (uid, b) in enumerate(ranked)
         )
     else:

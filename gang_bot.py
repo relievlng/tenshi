@@ -42,6 +42,73 @@ bot.tree.add_command(subscription_group)
 bot.tree.interaction_check = subscription_gate
 
 
+# --------------------------------------------------------------------------- #
+# Live status — rotates every 30s through real numbers
+# --------------------------------------------------------------------------- #
+
+def _status_activities() -> list[discord.BaseActivity]:
+    """The presence rotation, built fresh each tick off live numbers.
+
+    Uses real activity types so Discord renders the verb — "Watching over
+    12,400 members", "Competing in 2 gang wars" — instead of a flat line.
+    Counts only subscribed servers, so figures match what members actually see.
+    Set BOT_STATUS to pin a custom line (shown verb-less) at the front.
+    """
+    W = discord.ActivityType.watching
+    L = discord.ActivityType.listening
+    C = discord.ActivityType.competing
+    P = discord.ActivityType.playing
+
+    active = [g for g in bot.guilds if guild_active(g.id)]
+    members = sum(g.member_count or 0 for g in active)
+    tickets = 0
+    wars = 0
+    for g in active:
+        store = guild_store(DATA, g.id)
+        tickets += sum(1 for o in store.get("orders", []) if o.get("status", "open") == "open")
+        wars += sum(1 for w in store.get("wars", []) if w.get("active", True))
+
+    acts: list[discord.BaseActivity] = []
+    custom = (os.getenv("BOT_STATUS") or "").strip()
+    if custom:
+        acts.append(discord.CustomActivity(name=custom[:128]))
+    if active:
+        acts.append(discord.Activity(type=W, name=f"{len(active)} gang{'s' if len(active) != 1 else ''} 🏴"))
+    if members:
+        acts.append(discord.Activity(type=W, name=f"over {members:,} members"))
+    if wars:
+        acts.append(discord.Activity(type=C, name=f"{wars} gang war{'s' if wars != 1 else ''} ⚔️"))
+    if tickets:
+        acts.append(discord.Activity(type=W, name=f"{tickets} open ticket{'s' if tickets != 1 else ''} 🎫"))
+    acts.append(discord.Activity(type=L, name="/gang_help"))
+    site = _site_url()
+    host = site.split("://", 1)[-1].strip("/") if site else ""
+    acts.append(discord.Activity(type=P, name=f"Gang Manager · {host}" if host else "Gang Manager by pmxl"))
+    return acts
+
+
+_status_i = 0
+
+
+@tasks.loop(seconds=30)
+async def status_loop() -> None:
+    global _status_i
+    try:
+        acts = _status_activities()
+        if not acts:
+            return
+        act = acts[_status_i % len(acts)]
+        _status_i += 1
+        await bot.change_presence(status=discord.Status.online, activity=act)
+    except Exception as exc:  # noqa: BLE001 — a status blip must never stop the loop
+        log.debug("status update skipped: %s", exc)
+
+
+@status_loop.before_loop
+async def _before_status_loop() -> None:
+    await bot.wait_until_ready()
+
+
 @bot.listen("on_interaction")
 async def _trace_interaction(interaction: discord.Interaction) -> None:
     # slim trace (debug level): which component was clicked, by whom
@@ -70,10 +137,8 @@ async def on_ready() -> None:
     bot.add_view(WarPanelView())
     bot.add_view(HelpView())
     bot.add_dynamic_items(VouchDecisionButton)
-    try:
-        await bot.change_presence(activity=discord.CustomActivity(name="winks fat"))
-    except discord.DiscordException:
-        pass
+    if not status_loop.is_running():
+        status_loop.start()
     if not ticket_autoclose_loop.is_running():
         ticket_autoclose_loop.start()
     if not eoi_timer_loop.is_running():
@@ -183,9 +248,10 @@ async def on_member_join(member: discord.Member) -> None:
         embed.set_thumbnail(url=member.display_avatar.url)
         embed.set_footer(text=f"Member #{guild.member_count}")
         try:
-            await wchannel.send(
-                content=member.mention,
-                embed=embed,
+            await _send_card(
+                wchannel,
+                [embed],
+                header=member.mention,
                 allowed_mentions=discord.AllowedMentions(users=True),
             )
         except discord.HTTPException:
