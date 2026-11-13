@@ -78,7 +78,7 @@ def _live_roster_embed(
     return embed
 
 
-class RosterRefreshView(discord.ui.View):
+class RosterRefreshView(GatedView):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 

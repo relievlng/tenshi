@@ -266,7 +266,7 @@ async def _announce_war_end(channel, war: dict, guild: discord.Guild, actor=None
     )
 
 
-class WarPanelView(discord.ui.View):
+class WarPanelView(GatedView):
     """Staff buttons on a war scoreboard."""
 
     def __init__(self) -> None:
@@ -543,7 +543,7 @@ def _dashboard_cards(guild: discord.Guild, store: dict[str, Any]) -> list[discor
     return cards
 
 
-class DashboardView(discord.ui.View):
+class DashboardView(GatedView):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 

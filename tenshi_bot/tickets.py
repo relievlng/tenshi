@@ -710,7 +710,7 @@ class TicketPanelSelect(discord.ui.Select):
         await _reset_panel_select(interaction, store)
 
 
-class TicketPanelView(discord.ui.View):
+class TicketPanelView(GatedView):
     def __init__(self, options: list[discord.SelectOption] | None = None) -> None:
         super().__init__(timeout=None)
         self.add_item(TicketPanelSelect(options))
@@ -729,7 +729,7 @@ async def _reset_panel_select(interaction: discord.Interaction, store: dict) -> 
         pass
 
 
-class OrderTicketView(discord.ui.View):
+class OrderTicketView(GatedView):
     """Staff buttons on a ticket: Claim, Mark Paid/Unpaid, Priority and Close.
     Pass the order so the paid button shows the right label/colour."""
 
@@ -1298,6 +1298,8 @@ async def ticket_remove(interaction: discord.Interaction, member: discord.Member
 async def ticket_autoclose_loop() -> None:
     now = datetime.datetime.now(datetime.timezone.utc).timestamp()
     for guild in bot.guilds:
+        if not guild_active(guild.id):
+            continue  # paused until the server's subscription is active
         store = guild_store(DATA, guild.id)
         hours = store.get("ticket_autoclose_hours") or 0
         if hours <= 0:

@@ -30,6 +30,7 @@ from .billing import (
     subscription_state,
     effective_state,
     is_active,
+    peek_active,
     grant,
     expire,
     is_owner,
@@ -1130,6 +1131,7 @@ def _server_picker(uid: str, accessible_ids: set) -> list | None:
         can_manage = g["owner"] or bool(perms & (_PERM_ADMIN | _PERM_MANAGE_GUILD))
         if not bot_in and not can_manage:
             continue
+        subscribed = peek_active(g["id"])
         out.append(
             {
                 "id": g["id"],
@@ -1139,10 +1141,30 @@ def _server_picker(uid: str, accessible_ids: set) -> list | None:
                 "bot_in": bot_in,
                 "access": g["id"] in accessible_ids,
                 "can_add": (not bot_in) and can_manage,
+                "subscribed": subscribed,
+                # subscribe first, then add — the bot owner can always add
+                "can_invite": (not bot_in) and can_manage and (subscribed or is_owner(uid)),
             }
         )
-    out.sort(key=lambda s: (not s["access"], not s["bot_in"], not s["can_add"], s["name"].lower()))
+    out.sort(key=lambda s: (not s["access"], not s["bot_in"], not s["can_invite"], not s["can_add"],
+                            s["name"].lower()))
     return out
+
+
+def _managed_server(uid: str, gid: str) -> dict | None:
+    """One of the user's own servers (owner / admin / manage server) from their
+    login, even if the bot isn't in it yet — so they can subscribe for it."""
+    entry = _USER_CACHE.get(str(uid)) or {}
+    for g in entry.get("guilds") or []:
+        if g["id"] != str(gid):
+            continue
+        try:
+            perms = int(g["permissions"])
+        except (TypeError, ValueError):
+            perms = 0
+        if g["owner"] or perms & (_PERM_ADMIN | _PERM_MANAGE_GUILD):
+            return g
+    return None
 
 
 # ---- panel access ----------------------------------------------------------- #
@@ -2420,13 +2442,25 @@ async def sync_subscriptions_from_stripe() -> int:
 # ---- pricing / invite landing ---------------------------------------------- #
 
 async def _h_invite(request):
-    """Login-gated bot invite. Only a signed-in user can add the bot; they land
-    back on the panel afterward. The bot itself still enforces the subscription
-    once it's in the server (it stays locked until the server subscribes)."""
+    """Bot invite — subscribe first: only a signed-in user, only for a server
+    that already has an active subscription (the bot owner can always add it).
+    The bot also leaves unsubscribed servers on join, so copied links fail."""
     uid = _read_session(request.cookies.get(_COOKIE))
     if not uid:
         return _aioweb.HTTPFound("/login")
-    url = _invite_url(request.query.get("guild"))
+    gid = (request.query.get("guild") or "").strip()
+    if not is_owner(uid):
+        if not gid.isdigit():
+            return _aioweb.HTTPFound("/panel#servers")  # pick (and subscribe) a server first
+        if not peek_active(gid):
+            name = (_managed_server(uid, gid) or {}).get("name") or "This server"
+            return _simple_page(
+                "💳", "Subscribe first",
+                f"<b>{html.escape(name)}</b> needs an active subscription before Gang Manager can be "
+                "added. Just paid? This unlocks by itself in a few seconds.",
+                _await_active_actions(gid, subscribe=True),
+            )
+    url = _invite_url(gid if gid.isdigit() else None)
     if not url:
         return _simple_page(
             "⏳", "Almost ready", "The bot is still starting up — try again in a few seconds.",
@@ -2745,10 +2779,10 @@ h1 .g{background-size:200% 100%;animation:sheen 6s ease-in-out infinite}
   <h2 class=rev>How it works</h2>
   <p class="sub rev">No hosting, no config files. Add it and you're running.</p>
   <div class=steps>
-    <div class="step rev"><div class=ic>➕</div><h4>Add the bot</h4><p>Log in with Discord, pick your server, and add Gang Manager in one click.</p></div>
-    <div class="step rev"><div class=ic>💳</div><h4>Subscribe</h4><p>Pick your server and subscribe — $7.99 a month, cancel anytime.</p></div>
-    <div class="step rev"><div class=ic>⚙️</div><h4>Set it up</h4><p>Pick your channels and roles from dropdowns in the web panel.</p></div>
-    <div class="step rev"><div class=ic>🚀</div><h4>Run your gang</h4><p>Roster, tickets, wars and more — all live, all logged.</p></div>
+    <div class="step rev"><div class=ic>🔑</div><h4>Log in</h4><p>Log in with Discord and pick the server you want to run it in.</p></div>
+    <div class="step rev"><div class=ic>💳</div><h4>Subscribe</h4><p>$7.99 a month for that server — cancel anytime.</p></div>
+    <div class="step rev"><div class=ic>➕</div><h4>Add the bot</h4><p>One click adds Gang Manager, fully unlocked.</p></div>
+    <div class="step rev"><div class=ic>⚙️</div><h4>Set it up</h4><p>Pick channels &amp; roles from dropdowns in the web panel — you're live.</p></div>
   </div>
 </section>
 
@@ -2784,7 +2818,7 @@ h1 .g{background-size:200% 100%;animation:sheen 6s ease-in-out infinite}
   <h2 class=rev>Good to know</h2>
   <div class="faq rev" style="margin-top:28px">
     <details><summary>Can I use one subscription on multiple servers?</summary><p>No — each subscription covers one server. To run Gang Manager in another server, add it there and start a separate subscription for it.</p></details>
-    <details><summary>How much does it cost?</summary><p>$7.99 a month per Discord server. Add the bot, subscribe, and everything unlocks. Cancel anytime.</p></details>
+    <details><summary>How much does it cost?</summary><p>$7.99 a month per Discord server. Subscribe for your server, add the bot, and everything unlocks. Cancel anytime.</p></details>
     <details><summary>Do I need to host anything?</summary><p>No. Gang Manager is fully hosted and online 24/7. Add it from this site and it just works.</p></details>
     <details><summary>Can I cancel?</summary><p>Anytime. Your access stays active until the end of the period you've paid for.</p></details>
   </div>
@@ -2932,40 +2966,46 @@ async def _h_billing_checkout(request):
             f"Online checkout isn't switched on yet. {who} and they'll activate your server.",
             _support_actions(), 503,
         )
-    guild = _pick_billing_guild(request)
-    if guild is None:
-        guilds = await _accessible_guilds(uid)
-        if len(guilds) == 1:
-            guild = guilds[0]
-        elif not guilds:
-            return _aioweb.HTTPFound("/panel")  # the panel walks them through adding the bot
-        else:
-            opts = "".join(
-                f"<a class='b' href='/billing/checkout?guild={g.id}'>{html.escape(g.name)}</a>" for g in guilds
-            )
-            return _simple_page("💳", "Which server?", "Each subscription covers one server — pick one.", opts)
-    if not await _has_web_access(guild, uid):
-        return _simple_page("🔒", "No access to that server", _NO_ACCESS_TEXT, _BACK, 403)
-    st = effective_state(guild.id)
-    if st["mode"] in ("owner", "free", "lifetime"):
+    gid_q = (request.query.get("guild") or "").strip()
+    guild = bot.get_guild(int(gid_q)) if gid_q.isdigit() else None
+    if guild is not None:
+        # the bot is already there — only people with panel access can pay for it
+        if not await _has_web_access(guild, uid):
+            return _simple_page("🔒", "No access to that server", _NO_ACCESS_TEXT, _BACK, 403)
+        target_id, target_name = guild.id, guild.name
+    elif gid_q.isdigit():
+        # subscribe-first: one of the user's own servers the bot hasn't joined yet
+        srv = _managed_server(uid, gid_q)
+        if srv is None:
+            if _USER_CACHE.get(str(uid)) is None:
+                return _aioweb.HTTPFound("/login")  # server list expired — log in again
+            return _simple_page("🔒", "Not your server",
+                                "You can only subscribe for a server you own or manage.", _BACK, 403)
+        target_id, target_name = int(gid_q), srv["name"]
+    else:
+        return _aioweb.HTTPFound("/panel")  # pick a server in the panel first
+
+    if peek_active(target_id):
+        st = effective_state(target_id)
+        if st.get("customer_id") and guild is not None:
+            return _aioweb.HTTPFound(f"/billing/portal?guild={target_id}")
+        nxt = (f"<a class='b p' href='/invite?guild={target_id}'>➕ Add the bot</a>" if guild is None else "") + _BACK
         return _simple_page(
             "✅", "Already unlocked",
-            f"<b>{html.escape(guild.name)}</b> doesn't need a subscription — everything's already on.", _BACK,
+            f"<b>{html.escape(target_name)}</b> already has an active subscription.", nxt,
         )
-    if st["active"] and st.get("customer_id"):
-        return _aioweb.HTTPFound(f"/billing/portal?guild={guild.id}")
 
     base = _public_base(request)
     form = [
         ("mode", "subscription"),
         ("line_items[0][price]", os.getenv("STRIPE_PRICE_ID", "")),
         ("line_items[0][quantity]", "1"),
-        ("success_url", f"{base}/billing/success?session_id={{CHECKOUT_SESSION_ID}}"),
+        ("success_url", f"{base}/billing/success?guild={target_id}&session_id={{CHECKOUT_SESSION_ID}}"),
         ("cancel_url", f"{base}/panel"),
-        ("client_reference_id", str(guild.id)),
-        ("metadata[guild_id]", str(guild.id)),
+        ("client_reference_id", str(target_id)),
+        ("metadata[guild_id]", str(target_id)),
         ("metadata[purchaser_id]", str(uid)),
-        ("subscription_data[metadata][guild_id]", str(guild.id)),
+        ("subscription_data[metadata][guild_id]", str(target_id)),
         ("subscription_data[metadata][purchaser_id]", str(uid)),
         ("allow_promotion_codes", "true"),
     ]
@@ -3003,7 +3043,41 @@ async def _h_billing_portal(request):
     return _aioweb.HTTPFound(sess["url"])
 
 
+def _await_active_actions(gid: str, subscribe: bool = False) -> str:
+    """Buttons for 'waiting on Stripe': polls until the server's subscription
+    is active, then unlocks '➕ Add the bot'. gid is validated digits."""
+    sub_btn = f"<a class='b' href='/billing/checkout?guild={gid}'>💳 Subscribe</a>" if subscribe else ""
+    return (
+        "<a class='b p' id='go' href='#' style='opacity:.55;pointer-events:none'>⏳ Waiting for payment…</a>"
+        + sub_btn
+        + "<a class='b' href='/panel'>Back to the panel</a>"
+        "<script>(function(){var g='" + gid + "';function t(){fetch('/api/sub_check?guild='+g)"
+        ".then(function(r){return r.json();}).then(function(d){if(d.active){var a=document.getElementById('go');"
+        "a.href='/invite?guild='+g;a.textContent='➕ Add the bot';a.style.opacity='1';a.style.pointerEvents='auto';}"
+        "else setTimeout(t,2500);}).catch(function(){setTimeout(t,4000);});}t();})();</script>"
+    )
+
+
+async def _h_sub_check(request):
+    """Is this server subscribed yet? (Polled while waiting on Stripe.)"""
+    uid = _read_session(request.cookies.get(_COOKIE))
+    if not uid:
+        return _aioweb.json_response({"active": False}, status=401)
+    gid = (request.query.get("guild") or "").strip()
+    if not gid.isdigit():
+        return _aioweb.json_response({"active": False})
+    return _aioweb.json_response({"active": peek_active(gid), "bot_in": bot.get_guild(int(gid)) is not None})
+
+
 async def _h_billing_success(request):
+    gid = (request.query.get("guild") or "").strip()
+    if gid.isdigit() and bot.get_guild(int(gid)) is None:
+        # subscribed before adding the bot: next step is adding it
+        return _simple_page(
+            "✅", "You're subscribed!",
+            "Confirming your payment with Stripe — then add Gang Manager to your server.",
+            _await_active_actions(gid),
+        )
     return _simple_page(
         "✅", "You're subscribed!", "Activation lands in a few seconds — taking you to your panel…",
         "<a class='b p' href='/panel'>Open the panel</a>"
@@ -3478,6 +3552,7 @@ async def start_web_server() -> None:
             _aioweb.get("/billing/checkout", _h_billing_checkout),
             _aioweb.get("/billing/success", _h_billing_success),
             _aioweb.get("/billing/portal", _h_billing_portal),
+            _aioweb.get("/api/sub_check", _h_sub_check),
             _aioweb.post("/billing/webhook", _h_billing_webhook),
             _aioweb.get("/login", _h_login),
             _aioweb.get("/callback", _h_callback),
@@ -3911,6 +3986,7 @@ _PAGE_HTML = """
   .whoami{display:inline-flex;align-items:center;gap:8px;margin-top:4px;font-size:13px;color:var(--mute)}
   .whoami img{width:22px;height:22px;border-radius:50%}
   .gaterow button{width:auto!important;margin-top:0!important}
+  .srv button{width:auto!important;margin-top:0!important;flex:none}
   /* ---- living background ---- */
   .aura{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
   .aura i{position:absolute;border-radius:50%;filter:blur(80px);opacity:.38;animation:aurafloat 22s ease-in-out infinite}
@@ -3971,7 +4047,7 @@ _PAGE_HTML = """
   <div class="logo hasimg" id="brandLogo"><img src="/gm-logo.png" alt="Gang Manager"></div>
   <div class="brand">GANG MANAGER<small id="sub">Admin Panel</small></div>
   <div id="userChip" class="userchip" style="display:none"><img id="userAv" alt=""><span id="userName"></span><span id="opBadge" class="opbadge" style="display:none">BOT OWNER</span></div>
-  <a id="headerInvite" href="/invite" target="_blank" rel="noopener" style="display:none"><button class="ghost">➕ Add to a server</button></a>
+  <a id="headerInvite" href="#servers" onclick="openPicker();return false;" style="display:none"><button class="ghost">➕ Add to a server</button></a>
   <a id="logoutBtn" href="/logout" style="display:none"><button class="ghost">Log out</button></a>
 </header>
 
@@ -4067,22 +4143,31 @@ function renderUser(u){
   c.style.display="";
 }
 function srvIcon(s){return s.icon?`<img src="${h(s.icon)}" alt="">`:`<span>${h((s.name||"?").trim().charAt(0).toUpperCase())}</span>`;}
-function showPicker(me){
+function showPicker(me,fromApp){
   var list=me.servers||[];
+  var price=((STATE.pub||{}).plan||{}).price||"$7.99 / month";
   var rows=list.map(function(s){
     var status="",action="";
-    if(s.bot_in&&!s.access){status=`<span class="srvtag">Uses Gang Manager</span>Ask the server owner to add you in Settings → Website access.`;}
-    else if(s.can_add){status=s.owner?"You own this server":"You can manage this server";action=`<a href="/invite?guild=${h(s.id)}" target="_blank" rel="noopener"><button class="addbtn">➕ Add bot</button></a>`;}
+    if(s.bot_in&&s.access){status=`<span class="srvtag">Active here</span>You manage Gang Manager in this server.`;action=`<button class="addbtn" onclick="openGuild('${h(s.id)}')">Open</button>`;}
+    else if(s.bot_in){status=`<span class="srvtag">Uses Gang Manager</span>Ask the server owner to add you in Settings → Website access.`;}
+    else if(s.can_invite){status=`<span class="srvtag">Subscribed</span>Ready — add the bot to switch everything on.`;action=`<a href="/invite?guild=${h(s.id)}" target="_blank" rel="noopener"><button class="addbtn">➕ Add bot</button></a>`;}
+    else if(s.can_add){status=`Step 1: subscribe (${h(price)}) · Step 2: add the bot`;action=`<a href="/billing/checkout?guild=${h(s.id)}"><button class="addbtn">💳 Subscribe</button></a>`;}
     else{status="Runs Gang Manager";}
     return `<div class="srv"><div class="srvic">${srvIcon(s)}</div><div class="srvmeta"><b>${h(s.name)}</b><small>${status}</small></div>${action}</div>`;
   }).join("");
   var empty=`<div class="srvempty">No servers to show yet. Create a Discord server (or ask a server owner to add you), then refresh.</div>`;
   var u=me.user||{};
   var who=u.name?`<div class="whoami"><img src="${h(u.avatar||"")}" alt="">Logged in as <b>${h(u.name)}</b></div>`:"";
-  gate("➕","Pick a server","Add Gang Manager to one of your servers. Once it joins, subscribe here to switch everything on.",
-    `${who}<div class="srvlist">${rows||empty}</div><div class="gaterow"><button onclick="boot()">↻ Refresh</button><a href="/logout"><button class="ghost">Log out</button></a></div>`,true);
+  var back=fromApp?`<button onclick="boot()">← Back to the panel</button>`:`<button onclick="boot()">↻ Refresh</button>`;
+  gate("➕","Your servers","Subscribe for a server, then add Gang Manager to it. One subscription covers one server.",
+    `${who}<div class="srvlist">${rows||empty}</div><div class="gaterow">${back}<a href="/logout"><button class="ghost">Log out</button></a></div>`,true);
   window.__picker=true;
 }
+function openPicker(){
+  if(STATE.me&&Array.isArray(STATE.me.servers))showPicker(STATE.me,true);
+  else location.href="/login";  // server list expired — log in again to load it
+}
+function openGuild(id){STATE.prefGuild=id;boot();}
 function showSubGate(gid){
   var s=STATE.subs[gid]||{};
   var name=(STATE.guildNames||{})[gid]||"this server";
@@ -4099,7 +4184,7 @@ function showSubGate(gid){
 async function boot(){
   let me;try{me=await api("/api/me");}catch(e){gate("⚠️","Can't connect","Couldn't reach the server — try again.","<button onclick='boot()'>Retry</button>");return;}
   applyBrand(me.brand);
-  STATE.pub=me.public||{};STATE.owner=!!(me.user&&me.user.owner);
+  STATE.pub=me.public||{};STATE.owner=!!(me.user&&me.user.owner);STATE.me=me;
   STATE.subs={};STATE.canSetup={};STATE.guildNames={};
   (me.guilds||[]).forEach(x=>{STATE.subs[x.id]=x.subscription||null;STATE.canSetup[x.id]=!!x.can_setup;STATE.guildNames[x.id]=x.name;});
   renderUser(me.user);
@@ -4109,14 +4194,18 @@ async function boot(){
     else if(me.reason==="no_access"){
       if(Array.isArray(me.servers)) showPicker(me);
       else gate("➕","Add your server","Log in again to load your servers, or add Gang Manager to a server you own.",
-        `<a href="/login"><button class="discordbtn">${DSVG} Load my servers</button></a>`+inviteBtn()+`<div class="gaterow"><button class="ghost" onclick="boot()">↻ Refresh</button><a href="/logout"><button class="ghost">Log out</button></a></div>`);
+        `<a href="/login"><button class="discordbtn">${DSVG} Load my servers</button></a><div class="gaterow"><button class="ghost" onclick="boot()">↻ Refresh</button><a href="/logout"><button class="ghost">Log out</button></a></div>`);
     }
     else gate("","Gang Manager","Log in with Discord to set up and run your gang from the browser.",`<a href="/login"><button class="discordbtn">${DSVG} Log in with Discord</button></a>`+pricing);
     return;
   }
   // pick an active server by default; fall back to the first
+  var wantPicker=location.hash==="#servers";
+  if(wantPicker){try{history.replaceState(null,"",location.pathname);}catch(e){}}
+  if(wantPicker&&Array.isArray(me.servers)){showPicker(me,true);return;}
   var active=(me.guilds||[]).filter(x=>!(x.subscription&&x.subscription.billing_enabled)||x.subscription.active);
-  var def=(active[0]||me.guilds[0]||{}).id||"";
+  var pref=STATE.prefGuild&&(me.guilds||[]).find(x=>x.id===STATE.prefGuild);STATE.prefGuild=null;
+  var def=((pref||active[0]||me.guilds[0])||{}).id||"";
   var defSub=STATE.subs[def];
   if(defSub&&defSub.billing_enabled&&!defSub.active){ STATE.guild=def; showSubGate(def); return; }
   show("gate",false);show("app",true);$("logoutBtn").style.display="";
@@ -4481,7 +4570,7 @@ async function renderSettings(){
   }
   const roles=s.items.filter(i=>i.kind==="role"),mainc=s.items.filter(i=>i.kind==="channel"&&!i.is_log),logs=s.items.filter(i=>i.is_log);
   const webOn=s.web_enabled!==false;
-  const invite=(s.invite_url)?'<a href="'+h(s.invite_url)+'" target="_blank" rel="noopener"><button class="ghost">➕ Add to another server</button></a>':"";
+  const invite=`<button class="ghost" onclick="openPicker()">➕ Add to another server</button>`;
   const wa=s.web_access||{allowed:[],candidates:[]};
   const chips=(wa.allowed||[]).length
     ? (wa.allowed||[]).map(function(m){return `<span class="wmchip">@${h(m.name)}<button class="x" title="Remove" onclick="removeWebMember('${h(m.id)}')">✕</button></span>`;}).join("")
@@ -4541,8 +4630,7 @@ function subCardHTML(){
   var price=((STATE.pub||{}).plan||{}).price||"$7.99 / month";
   var until=s.expires_at?new Date(s.expires_at).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}):"";
   var pill,line,acts="";
-  if(s.mode==="owner"){pill=`<span class="spill ok">Your server</span>`;line="You own the bot, so this server is free forever.";}
-  else if(s.mode==="free"){pill=`<span class="spill ok">Free mode</span>`;line="Billing is switched off — everything is unlocked.";}
+  if(s.mode==="free"){pill=`<span class="spill ok">Free mode</span>`;line="Billing is switched off — everything is unlocked.";}
   else if(s.mode==="lifetime"){pill=`<span class="spill ok">Lifetime</span>`;line="Lifetime access — this server never expires.";}
   else if(s.mode==="paid"){
     pill=`<span class="spill ok">Active</span>`;line=`Paid until <b>${h(until)}</b>${s.has_billing?" · renews automatically":""}.`;

@@ -182,16 +182,23 @@ use the panel but not change settings.
 
 Gang Manager runs as a paid product that other servers add themselves.
 
-- **Login & server picker** — people log in with Discord (`identify` + `guilds`).
-  The panel lists their servers: ones they can add the bot to (one-click **Add
-  bot**, with that server pre-selected) and ones that already run it.
+- **Login & server picker** — people log in with Discord (`identify` + `guilds`)
+  and see their servers. **Subscribe first, then add:** each of their servers
+  shows **💳 Subscribe**; once paid it switches to **➕ Add bot** (pre-selected
+  server). The website won't hand out an invite for an unsubscribed server, and
+  if someone uses a copied invite link anyway, the bot posts a short note and
+  **leaves** any new server without an active subscription.
 - **You are the operator automatically** — whoever owns the bot application (or
-  its team) in the Developer Portal is detected on startup: you bypass the
-  paywall, see a **BOT OWNER** badge, can open any server's panel for support,
-  and servers you own are always free. Add extra operators with `BOT_OWNER_IDS`.
-- **Subscriptions (on by default)** — one monthly subscription per server. An
-  unsubscribed server keeps `/subscription`, `/settings` and `/gang_help`, but
-  every other command — and the web panel — is locked until it's active.
+  its team) is detected on startup: you get a **BOT OWNER** badge, can open any
+  server's panel, add the bot to your own servers, and comp servers. You get
+  **no special pass inside Discord**, so testing shows exactly what customers
+  see — comp your own gang's server with **♾ Lifetime** in Settings →
+  Subscription (or `/subscription grant lifetime:true`). Extra operators:
+  `BOT_OWNER_IDS`.
+- **Subscriptions (on by default)** — one monthly subscription per server.
+  Without one, slash commands (except `/subscription`, `/settings`,
+  `/gang_help`), every button and menu, welcome/join messages, the EOI timer and
+  ticket auto-close all pause in that server, and the web panel shows Subscribe.
 - **Settings → Subscription** shows the status and paid-until date, **Subscribe**
   or **Manage billing** (Stripe's portal: update the card, invoices, cancel), and
   for you, owner tools: **+30 days**, **Lifetime**, **Expire**, **Sync Stripe**.

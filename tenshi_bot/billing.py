@@ -6,14 +6,19 @@ A server's subscription lives in its store under ``subscription`` (see
 * **Stripe** — set ``STRIPE_SECRET_KEY`` / ``STRIPE_PRICE_ID`` /
   ``STRIPE_WEBHOOK_SECRET``; the Subscribe button takes real monthly payments and
   the webhook (web.py) keeps the paid-until date in sync with Stripe.
-* **Manual** — the bot operator runs ``/subscription grant`` (or uses the panel).
-* **The operator's own servers** — servers owned by whoever owns the bot
-  application are always active; you never pay for your own bot.
+* **Manual** — the bot operator comps a server with ``/subscription grant`` or
+  the panel's owner tools (e.g. ♾ Lifetime for your own gang's server).
+
+The paywall is the same everywhere: without an active subscription, slash
+commands (except /subscription, /settings, /gang_help), buttons and menus,
+welcome messages and the background jobs all pause in that server.
 
 The bot operator is detected automatically from the Discord application (the
 account/team that owns the bot in the Developer Portal), plus anyone listed in
-``BOT_OWNER_IDS``. Subscriptions are required by default
-(``BILLING_ENABLED=false`` turns the paywall off).
+``BOT_OWNER_IDS``. Operators can comp servers and open any server's web panel,
+but get no special pass inside Discord — so testing shows exactly what a
+customer sees. Subscriptions are required by default (``BILLING_ENABLED=false``
+turns the paywall off).
 """
 
 import datetime
@@ -27,6 +32,7 @@ __all__ = [
     "subscription_state",
     "effective_state",
     "is_active",
+    "peek_active",
     "grant",
     "start_trial",
     "expire",
@@ -111,15 +117,6 @@ async def detect_app_owners() -> set[int]:
     return set(ids)
 
 
-def _owner_server(guild_id) -> bool:
-    """A server owned by the bot operator — always active, never billed."""
-    try:
-        g = bot.get_guild(int(guild_id))
-    except (TypeError, ValueError):
-        return False
-    return g is not None and is_owner(getattr(g, "owner_id", None))
-
-
 # --------------------------------------------------------------------------- #
 # Subscription state
 # --------------------------------------------------------------------------- #
@@ -185,13 +182,10 @@ def subscription_state(guild_id: int) -> dict:
 
 def effective_state(guild_id: int) -> dict:
     """subscription_state plus the real answer to "can this server use the bot":
-    ``mode`` is one of free (paywall off) · owner (operator's own server) ·
-    lifetime · paid · none."""
+    ``mode`` is one of free (paywall off) · lifetime · paid · none."""
     s = subscription_state(guild_id)
     if not BILLING_ENABLED:
         s["active"], s["mode"] = True, "free"
-    elif _owner_server(guild_id):
-        s["active"], s["mode"] = True, "owner"
     elif s["active"]:
         s["mode"] = "lifetime" if s["lifetime"] else "paid"
     else:
@@ -202,6 +196,19 @@ def effective_state(guild_id: int) -> dict:
 def is_active(guild_id: int) -> bool:
     """True if this server may use paid features right now."""
     return effective_state(guild_id)["active"]
+
+
+def peek_active(guild_id) -> bool:
+    """Like is_active, but read-only: never creates a data entry. Used for
+    servers the bot isn't in yet (the server picker, invites, new joins)."""
+    if not BILLING_ENABLED:
+        return True
+    g = (DATA.get("guilds") or {}).get(str(guild_id))
+    sub = (g or {}).get("subscription") or {}
+    if sub.get("status") not in ("active", "trial"):
+        return False
+    exp = _parse_dt(sub.get("expires_at"))
+    return exp is None or exp > _now()
 
 
 def grant(
@@ -338,18 +345,16 @@ def _renew_hint(guild_id: int) -> str:
 # --------------------------------------------------------------------------- #
 
 async def subscription_gate(interaction: "discord.Interaction") -> bool:
-    """CommandTree check: allow the command only if the server is subscribed.
+    """The paywall check for slash commands AND buttons/menus (GatedView).
 
-    Exempt: DMs, the bot operator, and setup/subscription/help commands — so an
-    unsubscribed server can still check status and set up. No-op when billing
-    is off.
+    Exempt: DMs and the setup/subscription/help commands — so an unsubscribed
+    server can still check status, set up and subscribe. No-op when billing is
+    off. Nobody gets a personal pass, so what you test is what customers get.
     """
     if not BILLING_ENABLED:
         return True
     guild = interaction.guild
-    if guild is None:  # DM commands
-        return True
-    if is_owner(interaction.user.id):
+    if guild is None:  # DMs (e.g. rating a closed ticket)
         return True
     cmd = interaction.command
     qname = getattr(cmd, "qualified_name", "") if cmd is not None else ""
@@ -389,8 +394,6 @@ def _fmt_state(guild: "discord.Guild", state: dict) -> discord.Embed:
     status = state["status"]
     if mode == "free":
         head, color = "✅ Active (billing is off — free mode)", 0x22C55E
-    elif mode == "owner":
-        head, color = "✅ Active — this is the bot owner's server (no subscription needed)", 0x22C55E
     elif mode == "lifetime":
         head, color = "✅ Active — lifetime", 0x22C55E
     elif state["active"]:
@@ -402,7 +405,7 @@ def _fmt_state(guild: "discord.Guild", state: dict) -> discord.Embed:
 
     embed = discord.Embed(title="💳  Subscription", description=head, color=color)
     plan = state.get("plan")
-    if mode not in ("free", "owner"):
+    if mode != "free":
         if plan and plan in PLANS:
             embed.add_field(name="Plan", value=f"{PLANS[plan]['label']} — {PLANS[plan]['price']}", inline=True)
         elif plan:
@@ -492,3 +495,14 @@ async def subscription_cancel(interaction: discord.Interaction, server_id: str |
                                                 ephemeral=True)
     else:
         await interaction.response.send_message("🔒 Subscription expired.", ephemeral=True)
+
+
+# --------------------------------------------------------------------------- #
+# Install the paywall: buttons/menus (GatedView), background jobs and events
+# in core.py consult these. Slash commands use subscription_gate directly via
+# bot.tree.interaction_check (gang_bot.py).
+# --------------------------------------------------------------------------- #
+from . import core as _core  # noqa: E402
+
+_core._PAYWALL = subscription_gate
+_core._ACTIVE = is_active

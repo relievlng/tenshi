@@ -227,7 +227,7 @@ def _muster_embed(text: str, attendees: list[int], size: int) -> discord.Embed:
     return embed
 
 
-class MusterView(discord.ui.View):
+class MusterView(GatedView):
     """Public sign-up — just the Join button."""
 
     def __init__(self) -> None:
@@ -283,7 +283,7 @@ def _draw_control_embed(target: discord.abc.GuildChannel, size: int) -> discord.
     )
 
 
-class StaffDrawView(discord.ui.View):
+class StaffDrawView(GatedView):
     """Leaders-chat control — the Draw button."""
 
     def __init__(self) -> None:
@@ -466,13 +466,13 @@ class _ProposalAddSelect(discord.ui.Select):
         )
 
 
-class _SubSelectView(discord.ui.View):
+class _SubSelectView(GatedView):
     def __init__(self, item: discord.ui.Select) -> None:
         super().__init__(timeout=120)
         self.add_item(item)
 
 
-class RosterProposalView(discord.ui.View):
+class RosterProposalView(GatedView):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 

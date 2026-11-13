@@ -395,6 +395,33 @@ def _embed_container(embed: discord.Embed) -> "discord.ui.Container":
     return container
 
 
+# ---- paywall hooks --------------------------------------------------------- #
+# billing.py installs these at import; until then everything is allowed.
+_PAYWALL = None  # async (interaction) -> bool : may this interaction run?
+_ACTIVE = None   # (guild_id) -> bool        : is this server subscribed?
+
+
+def guild_active(guild_id) -> bool:
+    """True if this server may use the bot right now."""
+    return True if _ACTIVE is None else bool(_ACTIVE(guild_id))
+
+
+class GatedView(discord.ui.View):
+    """Base for every paid feature's buttons and menus: in a server without an
+    active subscription, a click gets a short 'not active' notice instead of
+    running (the same check slash commands go through)."""
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return True if _PAYWALL is None else await _PAYWALL(interaction)
+
+
+class GatedLayoutView(discord.ui.LayoutView):
+    """GatedView for cards sent in the Components V2 look."""
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return True if _PAYWALL is None else await _PAYWALL(interaction)
+
+
 def _embed_to_v2(embed: discord.Embed) -> "discord.ui.LayoutView":
     layout = discord.ui.LayoutView()
     layout.add_item(_embed_container(embed))
@@ -414,8 +441,10 @@ def _v2_layout(
     header: str | None = None,
 ) -> "discord.ui.LayoutView":
     """Embeds → V2 containers, plus the classic view's buttons/menus moved into
-    action rows (same items, same custom_ids, same callbacks)."""
-    layout = discord.ui.LayoutView(timeout=None)
+    action rows (same items, same custom_ids, same callbacks). Paid views keep
+    their subscription check in the V2 look too."""
+    layout_cls = GatedLayoutView if isinstance(view, GatedView) else discord.ui.LayoutView
+    layout = layout_cls(timeout=None)
     if header:
         layout.add_item(discord.ui.TextDisplay(header))
     for e in embeds:
@@ -764,7 +793,7 @@ def _set_embed_field(embed: discord.Embed, name: str, value: str, inline: bool =
     embed.add_field(name=name, value=value, inline=inline)
 
 
-class EOIView(discord.ui.View):
+class EOIView(GatedView):
     """Yes / No voting buttons attached to an EOI application embed.
 
     Votes are stored on the embed itself (as footer counts) and tracked in
@@ -1445,6 +1474,8 @@ async def _request_vouch(
 async def eoi_timer_loop() -> None:
     now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
     for guild in bot.guilds:
+        if not guild_active(guild.id):
+            continue  # paused until the server's subscription is active
         store = guild_store(DATA, guild.id)
         for mid, rec in list(store.get("eoi_timers", {}).items()):
             if rec.get("done") or not rec.get("ends") or rec["ends"] > now:
@@ -1544,7 +1575,7 @@ class SelfRoleSelect(discord.ui.Select):
             )
 
 
-class SelfRoleView(discord.ui.View):
+class SelfRoleView(GatedView):
     def __init__(self, options: list[discord.SelectOption] | None = None) -> None:
         super().__init__(timeout=None)
         self.add_item(SelfRoleSelect(options))

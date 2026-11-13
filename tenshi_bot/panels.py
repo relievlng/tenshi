@@ -197,7 +197,7 @@ def _radio_panel_embed(freq: str | None, rolled_by: str | None = None) -> discor
     return embed
 
 
-class RadioPanelView(discord.ui.View):
+class RadioPanelView(GatedView):
     """Persistent panel: a button that rolls a new frequency and pings a role."""
 
     def __init__(self) -> None:
@@ -380,7 +380,7 @@ async def eoi_post(
     await interaction.response.send_message("EOI prompt posted. ✅", ephemeral=True)
 
 
-class EOIPromptView(discord.ui.View):
+class EOIPromptView(GatedView):
     """A persistent 'Apply' button that opens the EOI modal for anyone."""
 
     def __init__(self) -> None:

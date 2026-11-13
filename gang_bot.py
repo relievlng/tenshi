@@ -127,10 +127,41 @@ async def on_guild_join(guild: discord.Guild) -> None:
             pass
         return
 
+    # A subscription is required BEFORE the bot can be added. The website only
+    # offers "Add bot" for subscribed servers; this catches copied invite links.
+    # Servers owned by the bot owner are allowed in so they can be comped.
+    if BILLING_ENABLED and not peek_active(guild.id) and not is_owner(getattr(guild, "owner_id", None)):
+        log.info("Leaving %s (%s): no active subscription", guild.name, guild.id)
+        site = web_base_url()
+        where = f" at {site}/panel" if site else " on the Gang Manager website"
+        note = (
+            "👋 Thanks for adding **Gang Manager**! This server doesn't have an active "
+            f"subscription yet, so I've left. Subscribe for this server{where}, then add me "
+            "again from there."
+        )
+        channel = guild.system_channel
+        me = guild.me
+        if channel is None or (me is not None and not channel.permissions_for(me).send_messages):
+            channel = next(
+                (c for c in guild.text_channels if me is not None and c.permissions_for(me).send_messages),
+                None,
+            )
+        if channel is not None:
+            try:
+                await channel.send(note)
+            except discord.HTTPException:
+                pass
+        try:
+            await guild.leave()
+        except discord.HTTPException:
+            pass
+
 
 @bot.event
 async def on_member_join(member: discord.Member) -> None:
     guild = member.guild
+    if not guild_active(guild.id):
+        return  # no welcome/logs until the server is subscribed
     store = guild_store(DATA, guild.id)
 
     # public welcome message
@@ -178,6 +209,8 @@ async def on_member_join(member: discord.Member) -> None:
 @bot.event
 async def on_member_remove(member: discord.Member) -> None:
     guild = member.guild
+    if not guild_active(guild.id):
+        return
     store = guild_store(DATA, guild.id)
     joined = member.joined_at
     roles = [r.mention for r in member.roles if r.name != "@everyone"]
