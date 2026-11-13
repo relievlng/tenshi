@@ -185,6 +185,9 @@ def guild_store(data: dict[str, Any], guild_id: int) -> dict[str, Any]:
     g.setdefault("wars", [])
     # Master on/off switch for the website panel (toggled from the site/commands)
     g.setdefault("web_enabled", True)
+    # Explicit list of member IDs allowed into the web panel (owner/admins are
+    # always allowed on top of this). Replaces the old web-access role.
+    g.setdefault("web_members", [])
     # Per-server subscription. status: none | trial | active | expired.
     # expires_at is ISO8601 (None = lifetime). See billing.py.
     g.setdefault(

@@ -985,7 +985,10 @@ async def _oauth_user(token: str) -> dict | None:
 # ---- role-based access ------------------------------------------------------ #
 
 async def _has_web_access(guild, uid, live: bool = False) -> bool:
-    """True only if the user holds this guild's configured website-access role.
+    """True only if the user may open this guild's web panel.
+
+    Access = the server owner, any admin, or a member on the panel's allowlist
+    (managed in Settings → Website access).
 
     With `live=True` the member is fetched fresh from the API instead of the
     gateway cache, so a role that was just removed is seen immediately even when
@@ -1006,8 +1009,12 @@ async def _has_web_access(guild, uid, live: bool = False) -> bool:
             return True
     except (AttributeError, TypeError):
         pass
-    rid = guild_store(DATA, guild.id).get("web_role_id")
-    return bool(rid) and any(r.id == rid for r in member.roles)
+    # Otherwise: anyone explicitly added to the panel's member allowlist.
+    allowed = guild_store(DATA, guild.id).get("web_members") or []
+    try:
+        return int(uid) in {int(x) for x in allowed}
+    except (TypeError, ValueError):
+        return False
 
 
 async def _accessible_guilds(uid) -> list:
@@ -1275,7 +1282,7 @@ def _web_actor(request, guild):
 
 
 async def _gate(request, guild, allow_disabled: bool = False) -> tuple[bool, int, str]:
-    """Allow only a logged-in user who holds this guild's website-access role.
+    """Allow only a logged-in user who may open this guild's web panel.
 
     Also blocks when the panel is switched off (``web_enabled``) or the server's
     subscription has lapsed — except handlers that pass ``allow_disabled=True``
@@ -2537,7 +2544,97 @@ def _settings_list(guild: "discord.Guild", store: dict) -> dict:
         "progress": {"done": done, "total": len(CONFIG_SETTINGS)},
         "web_enabled": bool(store.get("web_enabled", True)),
         "invite_url": _invite_url(),
+        "web_access": _web_members_list(guild, store),
     }
+
+
+def _web_members_list(guild: "discord.Guild", store: dict) -> dict:
+    """The panel's access allowlist plus pickable server members."""
+    allowed_ids = []
+    for x in store.get("web_members") or []:
+        try:
+            allowed_ids.append(int(x))
+        except (TypeError, ValueError):
+            pass
+    allowed = []
+    for uid in allowed_ids:
+        m = guild.get_member(uid)
+        allowed.append({"id": str(uid), "name": (m.display_name if m else f"User {uid}")})
+    # Candidates for the picker: real members (needs the members intent to be
+    # complete), bots excluded, already-allowed excluded, name-sorted, capped.
+    aset = set(allowed_ids)
+    cands = []
+    for m in getattr(guild, "members", []) or []:
+        if getattr(m, "bot", False) or m.id in aset:
+            continue
+        cands.append({"id": str(m.id), "name": m.display_name})
+    cands.sort(key=lambda c: c["name"].lower())
+    owner_id = getattr(guild, "owner_id", None)
+    return {
+        "allowed": allowed,
+        "candidates": cands[:500],
+        "owner_id": str(owner_id) if owner_id else "",
+        "member_count": len(cands) + len(allowed),
+    }
+
+
+async def _h_web_member_add(request):
+    guild = _guild_from(request.query.get("guild"))
+    if guild is None:
+        return _aioweb.json_response({"error": "Guild not found."}, status=404)
+    ok, code, msg = await _gate(request, guild, allow_disabled=True)
+    if not ok:
+        return _aioweb.json_response({"error": msg}, status=code)
+    try:
+        body = await request.json()
+    except Exception:
+        return _aioweb.json_response({"error": "Bad request."}, status=400)
+    try:
+        uid = int(body.get("user_id"))
+    except (TypeError, ValueError):
+        return _aioweb.json_response({"error": "Pick a member."}, status=400)
+    member = guild.get_member(uid)
+    if member is None:
+        try:
+            member = await guild.fetch_member(uid)
+        except discord.HTTPException:
+            return _aioweb.json_response({"error": "That member isn't in this server."}, status=400)
+    store = guild_store(DATA, guild.id)
+    members = store.setdefault("web_members", [])
+    if uid not in {int(x) for x in members}:
+        members.append(uid)
+        save_data(DATA)
+        await send_log(
+            guild, store, f"🌐 Gave **{member.display_name}** website access.",
+            category="web", actor=_web_actor(request, guild),
+        )
+    return _aioweb.json_response({"ok": True, "settings": _settings_list(guild, store)})
+
+
+async def _h_web_member_remove(request):
+    guild = _guild_from(request.query.get("guild"))
+    if guild is None:
+        return _aioweb.json_response({"error": "Guild not found."}, status=404)
+    ok, code, msg = await _gate(request, guild, allow_disabled=True)
+    if not ok:
+        return _aioweb.json_response({"error": msg}, status=code)
+    try:
+        body = await request.json()
+        uid = int(body.get("user_id"))
+    except Exception:
+        return _aioweb.json_response({"error": "Bad request."}, status=400)
+    store = guild_store(DATA, guild.id)
+    members = store.setdefault("web_members", [])
+    new = [x for x in members if int(x) != uid]
+    if len(new) != len(members):
+        store["web_members"] = new
+        save_data(DATA)
+        m = guild.get_member(uid)
+        await send_log(
+            guild, store, f"🌐 Removed website access from **{m.display_name if m else uid}**.",
+            category="web", actor=_web_actor(request, guild),
+        )
+    return _aioweb.json_response({"ok": True, "settings": _settings_list(guild, store)})
 
 
 async def _h_settings(request):
@@ -2610,7 +2707,7 @@ async def start_web_server() -> None:
     if not _configured():
         log.warning(
             "PORT is set but DISCORD_CLIENT_SECRET is not — the website loads but "
-            "nobody can log in until you set it (and a Website access role)."
+            "nobody can log in until you set it."
         )
     app = _aioweb.Application()
     app.add_routes(
@@ -2657,6 +2754,8 @@ async def start_web_server() -> None:
             _aioweb.get("/api/settings", _h_settings),
             _aioweb.post("/api/setting_set", _h_setting_set),
             _aioweb.post("/api/web_toggle", _h_web_toggle),
+            _aioweb.post("/api/web_member_add", _h_web_member_add),
+            _aioweb.post("/api/web_member_remove", _h_web_member_remove),
         ]
     )
     runner = _aioweb.AppRunner(app)
@@ -2672,8 +2771,8 @@ _DENIED_HTML = (
     "<body style='background:#0b0b0d;color:#ececf1;font-family:sans-serif;"
     "display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center'>"
     "<div><h2>🚫 No access</h2>"
-    "<p style='color:#9a9aa6'>Your Discord account doesn't have the website-access role.<br>"
-    "Ask leadership for the role set in <code>/settings role → Website access role</code>.</p>"
+    "<p style='color:#9a9aa6'>You don't have access to this panel yet.<br>"
+    "The server owner or an admin can add you under <b>⚙️ Settings → Website access</b>.</p>"
     "<p><a style='color:#9a9aa8' href='/logout'>Log out</a></p></div></body>"
 )
 
@@ -2902,6 +3001,11 @@ _PAGE_HTML = """
   .tgl{padding:7px 18px;border-radius:10px;font-weight:650;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--mute);cursor:pointer}
   .tgl.on{background:rgba(34,197,94,.22);border-color:rgba(34,197,94,.5);color:#bdf0c8}
   .card h4{margin:0 0 8px;font-size:15px}
+  .wmlist{display:flex;flex-wrap:wrap;gap:8px}
+  .wmchip{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:10px;font-size:13px;font-weight:600;
+    background:rgba(255,255,255,.07);border:1px solid var(--line)}
+  .wmchip .x{background:transparent;border:none;color:var(--mute);cursor:pointer;font-size:13px;padding:0;line-height:1}
+  .wmchip .x:hover{color:#ff8b8b}
 
   .addbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
   .addbar .i{flex:1;min-width:150px}.addbar .q{width:92px}
@@ -3095,7 +3199,7 @@ _PAGE_HTML = """
   <div id="settingsView" style="display:none"></div>
 </div>
 
-<footer>Only people with the website-access role can open this · changes apply to Discord live · made by pmxl</footer>
+<footer>Only the owner, admins and members you add can open this · changes apply to Discord live · made by pmxl</footer>
 
 <script>
 let STATE={members:[],ranks:[],kos:[],guild:""},TAB="roster";
@@ -3138,7 +3242,7 @@ async function boot(){
   STATE.subs={};(me.guilds||[]).forEach(x=>{STATE.subs[x.id]=x.subscription||null;});
   if(!me.authed){
     var pricing='<a href="/pricing"><button class="ghost">💳 Pricing</button></a>';
-    if(me.reason==="not_configured") gate("⚙️","Setup needed","The owner still needs to set DISCORD_CLIENT_SECRET and a Website access role before anyone can log in.",inviteBtn()+pricing);
+    if(me.reason==="not_configured") gate("⚙️","Setup needed","The owner still needs to set DISCORD_CLIENT_SECRET before anyone can log in.",inviteBtn()+pricing);
     else if(me.reason==="no_access") gate("➕","Add your server","You're logged in! Now add Gang Manager to a server you own — you'll get a 7-day free trial automatically. Already added it? Reload.",'<a href="/invite"><button class="discordbtn">➕ Add to Discord</button></a><button onclick="boot()">↻ Reload</button><a href="/logout"><button>Log out</button></a>');
     else gate("","Gang Manager","Log in with Discord to manage the roster, stash, KOS, strikes and more.",'<a href="/login"><button class="discordbtn">'+DSVG+' Log in with Discord</button></a>'+inviteBtn()+pricing);
     return;
@@ -3508,12 +3612,16 @@ async function renderSettings(){
     return o;
   }
   function row(it){
-    return '<div class="setrow"><label>'+it.emoji+' '+h(it.label)+'</label>'
-      +'<select onchange="setSetting(\''+it.key+'\',this.value)">'+opts(it.kind,it.value)+'</select></div>';
+    return `<div class="setrow"><label>${it.emoji} ${h(it.label)}</label><select onchange="setSetting('${it.key}',this.value)">${opts(it.kind,it.value)}</select></div>`;
   }
   const roles=s.items.filter(i=>i.kind==="role"),mainc=s.items.filter(i=>i.kind==="channel"&&!i.is_log),logs=s.items.filter(i=>i.is_log);
   const webOn=s.web_enabled!==false;
   const invite=(s.invite_url)?'<a href="'+h(s.invite_url)+'" target="_blank" rel="noopener"><button class="ghost">➕ Add to another server</button></a>':"";
+  const wa=s.web_access||{allowed:[],candidates:[]};
+  const chips=(wa.allowed||[]).length
+    ? (wa.allowed||[]).map(function(m){return `<span class="wmchip">@${h(m.name)}<button class="x" title="Remove" onclick="removeWebMember('${h(m.id)}')">✕</button></span>`;}).join("")
+    : '<div class="muted" style="font-size:13px">No extra members yet — owner &amp; admins already have access.</div>';
+  const copts='<option value="">Select a member…</option>'+(wa.candidates||[]).map(function(c){return '<option value="'+h(c.id)+'">@'+h(c.name)+'</option>';}).join("");
   el.innerHTML=
     '<div class="card">'
       +'<div class="setuptop"><div><h3 style="margin:0">⚙️ Setup</h3>'
@@ -3524,6 +3632,14 @@ async function renderSettings(){
     +'<div class="card"><div class="setrow toggle"><label>🌐 Website panel</label>'
       +'<button class="tgl '+(webOn?'on':'')+'" onclick="toggleWeb('+(!webOn)+')">'+(webOn?'On':'Off')+'</button></div>'
       +'<div class="muted" style="font-size:12px;margin-top:4px">Turn the whole web panel off for this server. You can switch it back on here any time.</div></div>'
+    +'<div class="card"><h4>👥 Website access</h4>'
+      +'<div class="muted" style="font-size:12px;margin-bottom:8px">The server owner and admins always have access. Add any other members who should use this panel.</div>'
+      +'<div class="wmlist">'+chips+'</div>'
+      +'<div class="addbar" style="margin-top:12px">'
+        +'<input id="wmFilter" class="i" placeholder="Search members…" oninput="filterWM()">'
+        +'<select id="wmSel" class="i">'+copts+'</select>'
+        +'<button onclick="addWebMember()">➕ Add</button></div>'
+      +(( (wa.candidates||[]).length===0 )?'<div class="muted" style="font-size:12px;margin-top:6px">No members to list yet — enable the Server Members Intent to populate this, or add by selecting once they appear.</div>':'')+'</div>'
     +'<div class="card"><h4>👑 Roles</h4>'+roles.map(row).join("")+'</div>'
     +'<div class="card"><h4>📁 Channels</h4>'+mainc.map(row).join("")+'</div>'
     +'<div class="card"><h4>📝 Log channels</h4>'
@@ -3536,6 +3652,22 @@ async function setSetting(key,value){
 }
 async function toggleWeb(on){
   try{const r=await post("/api/web_toggle",{guild:STATE.guild,enabled:on});toast("Website panel "+(r.enabled?"on":"off"),"ok");STATE.settings=null;renderSettings();}
+  catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
+}
+function filterWM(){
+  var q=(($("wmFilter")||{}).value||"").toLowerCase();
+  var cands=((STATE.settings||{}).web_access||{}).candidates||[];
+  var sel=$("wmSel");if(!sel)return;
+  var list=q?cands.filter(function(c){return c.name.toLowerCase().indexOf(q)>-1;}):cands;
+  sel.innerHTML='<option value="">Select a member…</option>'+list.slice(0,500).map(function(c){return '<option value="'+h(c.id)+'">@'+h(c.name)+'</option>';}).join("");
+}
+async function addWebMember(){
+  var id=(($("wmSel")||{}).value||"");if(!id)return toast("Pick a member","err");
+  try{const r=await post("/api/web_member_add",{guild:STATE.guild,user_id:id});STATE.settings=r.settings;toast("Access granted","ok");renderSettings();}
+  catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
+}
+async function removeWebMember(id){
+  try{const r=await post("/api/web_member_remove",{guild:STATE.guild,user_id:id});STATE.settings=r.settings;toast("Access removed","ok");renderSettings();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 boot();
