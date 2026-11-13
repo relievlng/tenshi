@@ -27,6 +27,7 @@ __all__ = [
     "start_trial",
     "expire",
     "is_owner",
+    "guild_for_sub",
     "subscription_gate",
     "subscription_group",
     "GATE_EXEMPT_PREFIXES",
@@ -193,6 +194,27 @@ def is_owner(user_id) -> bool:
         return int(user_id) in BOT_OWNER_IDS
     except (TypeError, ValueError):
         return False
+
+
+def guild_for_sub(sub_id, exclude_guild=None):
+    """Return a guild id (other than exclude_guild) whose ACTIVE subscription is
+    powered by this Stripe subscription id — used to enforce one server per sub.
+    """
+    if not sub_id:
+        return None
+    for gid_s, g in (DATA.get("guilds") or {}).items():
+        sub = g.get("subscription") or {}
+        if sub.get("sub_id") != sub_id:
+            continue
+        try:
+            gid = int(gid_s)
+        except (TypeError, ValueError):
+            continue
+        if exclude_guild is not None and gid == int(exclude_guild):
+            continue
+        if subscription_state(gid)["active"]:
+            return gid
+    return None
 
 
 # --------------------------------------------------------------------------- #

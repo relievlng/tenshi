@@ -32,6 +32,7 @@ from .billing import (
     grant,
     expire,
     is_owner,
+    guild_for_sub,
     PLANS,
     DEFAULT_PLAN,
 )
@@ -2501,13 +2502,31 @@ async def _h_billing_webhook(request):
 
     if etype in ("checkout.session.completed", "invoice.paid", "invoice.payment_succeeded"):
         if gid is not None:
+            sub_id = obj.get("subscription") or obj.get("id")
+            # One server per subscription: if this Stripe sub already powers a
+            # different server, don't let it unlock a second one.
+            other = guild_for_sub(sub_id, exclude_guild=gid)
+            if other is not None:
+                log.warning("Sub %s already active on guild %s — refusing to bind guild %s", sub_id, other, gid)
+                g = bot.get_guild(gid)
+                if g is not None:
+                    try:
+                        await send_log(
+                            g, guild_store(DATA, gid),
+                            f"⚠️ This subscription is already active on another server (`{other}`). "
+                            "Each subscription covers one server — start a separate subscription here.",
+                            category="web",
+                        )
+                    except discord.HTTPException:
+                        pass
+                return _aioweb.json_response({"received": True, "conflict": True})
             grant(
                 gid,
                 days=days,
                 plan=DEFAULT_PLAN,
                 status="active",
                 customer_id=obj.get("customer"),
-                sub_id=obj.get("subscription") or obj.get("id"),
+                sub_id=sub_id,
                 purchaser_id=_event_meta(obj, "purchaser_id"),
             )
             g = bot.get_guild(gid)
