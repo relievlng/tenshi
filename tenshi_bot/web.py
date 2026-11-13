@@ -1243,7 +1243,7 @@ async def _h_callback(request):
             )
         except (discord.HTTPException, ValueError, KeyError, TypeError):
             pass
-    resp = _aioweb.HTTPFound("/")
+    resp = _aioweb.HTTPFound("/panel")
     resp.set_cookie(
         _COOKIE, _sign_session(user["id"]), max_age=43200,
         httponly=True, secure=True, samesite="Lax",
@@ -2053,6 +2053,264 @@ async def _h_pricing(request):
     return _aioweb.Response(text=_pricing_page(request), content_type="text/html")
 
 
+_LANDING_HTML = r"""<!doctype html><html lang=en><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Gang Manager — the all-in-one FiveM gang bot</title>
+<meta name=description content="Roster, KOS, strikes, wars, tickets, recruitment and a full web control panel — one Discord bot for your FiveM gang.">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#060608;--pane:rgba(14,14,18,.66);--line:rgba(255,255,255,.12);--txt:#ececf1;--mute:#9a9aa6;--silver:#c9c9d2;--radius:20px}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.6;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+/* ---- animated aurora backdrop ---- */
+.aurora{position:fixed;inset:-30% -10% auto -10%;height:140%;z-index:-2;filter:blur(90px);opacity:.75;pointer-events:none}
+.aurora i{position:absolute;border-radius:50%;mix-blend-mode:screen;animation:float 18s ease-in-out infinite}
+.aurora i:nth-child(1){width:46vw;height:46vw;left:4%;top:2%;background:radial-gradient(circle,#4a4a55,transparent 60%);animation-delay:0s}
+.aurora i:nth-child(2){width:40vw;height:40vw;right:2%;top:12%;background:radial-gradient(circle,#e8e8f0,transparent 62%);opacity:.5;animation-delay:-5s}
+.aurora i:nth-child(3){width:52vw;height:52vw;left:28%;top:40%;background:radial-gradient(circle,#2a2a33,transparent 60%);animation-delay:-9s}
+@keyframes float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(6%,4%) scale(1.08)}66%{transform:translate(-5%,-3%) scale(.95)}}
+.grain{position:fixed;inset:0;z-index:-1;opacity:.04;pointer-events:none;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* ---- nav ---- */
+nav{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:14px;
+ padding:14px 26px;backdrop-filter:blur(14px);background:rgba(6,6,9,.55);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:.3px}
+.brand img{width:40px;height:26px;object-fit:contain}
+.navlinks{display:flex;gap:22px;align-items:center}
+.navlinks a{color:var(--mute);font-size:14px;font-weight:600;transition:color .2s}
+.navlinks a:hover{color:#fff}
+.btn{display:inline-flex;align-items:center;gap:8px;justify-content:center;padding:12px 20px;border-radius:13px;font-weight:700;
+ font-size:14px;cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.06);color:#fff;transition:transform .1s,box-shadow .2s,background .2s;white-space:nowrap}
+.btn:hover{transform:translateY(-2px)}
+.btn.primary{background:linear-gradient(90deg,#c9c9d2,#ffffff);color:#09090c;border:none;box-shadow:0 10px 30px rgba(220,220,235,.18)}
+.btn.primary:hover{box-shadow:0 16px 44px rgba(220,220,235,.3)}
+.btn.sm{padding:9px 15px;font-size:13px}
+.btn.disabled{opacity:.5;cursor:not-allowed;transform:none!important}
+@media(max-width:720px){.navlinks .hidem{display:none}}
+/* ---- hero ---- */
+.hero{position:relative;text-align:center;padding:92px 22px 70px;max-width:920px;margin:0 auto}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);
+ background:rgba(255,255,255,.04);font-size:12.5px;color:var(--mute);margin-bottom:26px;font-weight:600}
+.eyebrow b{color:#bdf0c8}
+.herologo{width:120px;height:74px;object-fit:contain;margin:0 auto 22px;display:block;filter:drop-shadow(0 0 40px rgba(255,255,255,.25))}
+h1{font-size:clamp(38px,7vw,70px);line-height:1.04;letter-spacing:-1.5px;font-weight:850}
+h1 .g{background:linear-gradient(90deg,#ffffff,#9a9aa8 60%,#ffffff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{color:var(--mute);font-size:clamp(16px,2.4vw,20px);max-width:620px;margin:20px auto 32px}
+.cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.trust{margin-top:20px;color:#6f6f78;font-size:13px}
+/* ---- marquee ---- */
+.marq{overflow:hidden;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(255,255,255,.02);margin:30px 0}
+.marq .row{display:flex;gap:40px;white-space:nowrap;padding:14px 0;animation:scroll 26s linear infinite;width:max-content}
+.marq span{color:#7c7c86;font-weight:800;font-size:15px;letter-spacing:.5px;text-transform:uppercase}
+.marq span b{color:#d8d8e0}
+@keyframes scroll{to{transform:translateX(-50%)}}
+/* ---- sections ---- */
+section{max-width:1080px;margin:0 auto;padding:64px 22px}
+.kicker{text-align:center;color:var(--silver);font-weight:800;letter-spacing:2px;text-transform:uppercase;font-size:12.5px;margin-bottom:10px}
+h2{text-align:center;font-size:clamp(28px,4.4vw,42px);letter-spacing:-.8px;font-weight:820;margin-bottom:12px}
+.sub{text-align:center;color:var(--mute);max-width:560px;margin:0 auto 40px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.feat{position:relative;padding:24px;border-radius:var(--radius);border:1px solid var(--line);background:var(--pane);backdrop-filter:blur(8px);
+ transition:transform .22s,border-color .22s,box-shadow .22s;overflow:hidden}
+.feat:hover{transform:translateY(-5px);border-color:rgba(255,255,255,.3);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.feat .ic{font-size:28px;margin-bottom:12px;display:block}
+.feat h3{font-size:18px;margin-bottom:6px}
+.feat p{color:var(--mute);font-size:14px}
+.feat::after{content:"";position:absolute;inset:0;background:radial-gradient(400px circle at var(--mx,50%) var(--my,0),rgba(255,255,255,.08),transparent 40%);opacity:0;transition:opacity .3s;pointer-events:none}
+.feat:hover::after{opacity:1}
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;counter-reset:s}
+.step{position:relative;padding:26px 22px;border-radius:var(--radius);border:1px solid var(--line);background:var(--pane)}
+.step::before{counter-increment:s;content:counter(s);position:absolute;top:-16px;left:22px;width:36px;height:36px;border-radius:11px;
+ display:grid;place-items:center;font-weight:800;background:linear-gradient(90deg,#c9c9d2,#fff);color:#09090c}
+.step .ic{font-size:22px;margin:8px 0 8px}
+.step h4{font-size:16px;margin-bottom:5px}
+.step p{color:var(--mute);font-size:13.5px}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:8px}
+.statc{text-align:center;padding:26px 14px;border-radius:var(--radius);border:1px solid var(--line);background:var(--pane)}
+.statc b{display:block;font-size:34px;font-weight:850;background:linear-gradient(90deg,#fff,#9a9aa8);-webkit-background-clip:text;background-clip:text;color:transparent}
+.statc span{color:var(--mute);font-size:13px;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+/* pricing */
+.price{max-width:430px;margin:0 auto;padding:36px 32px;border-radius:26px;border:1px solid rgba(255,255,255,.2);
+ background:linear-gradient(180deg,rgba(24,24,30,.8),rgba(10,10,14,.8));box-shadow:0 30px 90px rgba(0,0,0,.55);position:relative;overflow:hidden}
+.price::before{content:"";position:absolute;inset:0;border-radius:26px;padding:1px;background:linear-gradient(130deg,rgba(255,255,255,.5),transparent 40%);
+ -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.pill{display:inline-block;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.1);font-size:12px;font-weight:700;margin-bottom:16px}
+.amount{font-size:58px;font-weight:850;line-height:1}.amount small{font-size:17px;color:var(--mute);font-weight:600}
+.price ul{list-style:none;margin:22px 0}
+.price li{padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:14.5px;display:flex;gap:10px;align-items:center}
+.price li:last-child{border:none}.price li .c{color:#8ad18a;font-weight:800}
+/* faq */
+.faq{max-width:760px;margin:0 auto}
+details{border:1px solid var(--line);border-radius:14px;background:var(--pane);margin-bottom:12px;overflow:hidden}
+summary{cursor:pointer;padding:18px 20px;font-weight:650;list-style:none;display:flex;justify-content:space-between;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-size:22px;color:var(--mute);transition:transform .2s}
+details[open] summary::after{transform:rotate(45deg)}
+details p{padding:0 20px 18px;color:var(--mute);font-size:14.5px}
+/* reveal */
+.rev{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+.rev.in{opacity:1;transform:none}
+footer{text-align:center;padding:40px 22px;color:#6f6f78;font-size:13px;border-top:1px solid var(--line);margin-top:40px}
+footer a{color:var(--silver)}
+.bignote{text-align:center;max-width:680px;margin:0 auto;padding:40px 30px;border-radius:26px;border:1px solid var(--line);
+ background:linear-gradient(130deg,rgba(30,30,38,.7),rgba(8,8,11,.7))}
+</style></head><body>
+<div class=aurora><i></i><i></i><i></i></div><div class=grain></div>
+
+<nav>
+  <a class=brand href="/"><img src="/gm-logo.png" alt="GM">GANG MANAGER</a>
+  <div class=navlinks>
+    <a href="#features" class=hidem>Features</a>
+    <a href="#how" class=hidem>How it works</a>
+    <a href="#pricing" class=hidem>Pricing</a>
+    <a id="navCta" class="btn sm primary" href="/login">Open panel</a>
+  </div>
+</nav>
+
+<header class=hero>
+  <div class=eyebrow>✦ <b>Live</b> · all-in-one FiveM gang toolkit</div>
+  <img class=herologo src="/gm-logo.png" alt="Gang Manager">
+  <h1>Run your gang<br><span class=g>like a machine.</span></h1>
+  <p class=lead>Roster, KOS, strikes, wars, tickets and recruitment — one Discord bot with a full web control panel. Add it, start your free trial, and command everything from the browser.</p>
+  <div class=cta>
+    <a id="heroInvite" class="btn primary" href="#pricing">➕ Add to Discord</a>
+    <a class="btn" href="#pricing">See pricing</a>
+  </div>
+  <div class=trust id="heroStatus">7-day free trial · 1 server per subscription · cancel anytime</div>
+</header>
+
+<div class=marq><div class=row id="marqRow"></div></div>
+
+<section id=features>
+  <div class="kicker rev">Everything in one bot</div>
+  <h2 class=rev>Eight toolkits. Zero clutter.</h2>
+  <p class="sub rev">Each system is built for FiveM gangs and wired into Discord — and all of it is manageable from the web panel.</p>
+  <div class=grid id="featGrid"></div>
+</section>
+
+<section id=how>
+  <div class="kicker rev">Live in two minutes</div>
+  <h2 class=rev>How it works</h2>
+  <p class="sub rev">No hosting, no config files. Add it and you're running.</p>
+  <div class=steps>
+    <div class="step rev"><div class=ic>➕</div><h4>Add the bot</h4><p>One click from this site invites Gang Manager to your server.</p></div>
+    <div class="step rev"><div class=ic>🧪</div><h4>Free trial starts</h4><p>Every new server gets a 7-day trial automatically — no card needed.</p></div>
+    <div class="step rev"><div class=ic>⚙️</div><h4>Set it up</h4><p>Pick your channels and roles from dropdowns in the web panel.</p></div>
+    <div class="step rev"><div class=ic>🚀</div><h4>Run your gang</h4><p>Roster, tickets, wars and more — all live, all logged.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class=stats>
+    <div class="statc rev"><b>8</b><span>Modules</span></div>
+    <div class="statc rev"><b>50+</b><span>Commands</span></div>
+    <div class="statc rev"><b>2 min</b><span>Setup</span></div>
+    <div class="statc rev"><b>24/7</b><span>Hosted</span></div>
+  </div>
+</section>
+
+<section id=pricing>
+  <div class="kicker rev">Simple pricing</div>
+  <h2 class=rev>One plan. Everything included.</h2>
+  <p class="sub rev">One subscription covers one Discord server. Need the bot in another server? Add another subscription.</p>
+  <div class="price rev">
+    <span class=pill>MONTHLY</span>
+    <div class=amount>$7.99<small> / month</small></div>
+    <ul>
+      <li><span class=c>✓</span> Full roster, KOS, strikes &amp; wars</li>
+      <li><span class=c>✓</span> Ticket &amp; order system with transcripts</li>
+      <li><span class=c>✓</span> EOI recruitment with voting</li>
+      <li><span class=c>✓</span> Web control panel &amp; live logs</li>
+      <li><span class=c>✓</span> 1 Discord server · cancel anytime</li>
+    </ul>
+    <a id="buyBtn" class="btn primary" style="width:100%" href="/login">Start free trial</a>
+    <a id="inviteBtn2" class="btn" style="width:100%;margin-top:10px" href="#">➕ Add to Discord</a>
+  </div>
+</section>
+
+<section id=faq>
+  <div class="kicker rev">Questions</div>
+  <h2 class=rev>Good to know</h2>
+  <div class="faq rev" style="margin-top:28px">
+    <details><summary>Can I use one subscription on multiple servers?</summary><p>No — each subscription covers one server. To run Gang Manager in another server, add it there and start a separate subscription for it.</p></details>
+    <details><summary>Is there a free trial?</summary><p>Yes. Every server gets a 7-day trial automatically the moment you add the bot — no card required.</p></details>
+    <details><summary>Do I need to host anything?</summary><p>No. Gang Manager is fully hosted and online 24/7. Add it from this site and it just works.</p></details>
+    <details><summary>Can I cancel?</summary><p>Anytime. Your access stays active until the end of the period you've paid for.</p></details>
+  </div>
+</section>
+
+<section>
+  <div class="bignote rev">
+    <h2 style="margin-bottom:10px">Ready to take over the city?</h2>
+    <p class=sub style="margin-bottom:24px">Add Gang Manager and start your free trial right now.</p>
+    <div class=cta>
+      <a id="inviteBtn3" class="btn primary" href="#">➕ Add to Discord</a>
+      <a id="panelBtn" class="btn" href="/login">Open the panel</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Gang Manager · <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/panel">Panel</a> · made by pmxl
+</footer>
+
+<script>
+var FEATURES=[
+ ["🎯","Live Roster","Built straight from your rank roles — grouped, ranked and always current."],
+ ["💀","KOS List","Sign-up → random draw → staff approve → announce, all in one flow."],
+ ["⚠️","Strikes","Issue, track and auto-warn at the limit. Members get a DM on every change."],
+ ["⚔️","War Scoreboards","Live score, win-rate bar, round-by-round rolls and first-to targets."],
+ ["🎫","Tickets & Orders","Real Discord tickets — paid/unpaid, transcripts and auto-close."],
+ ["📨","EOI Recruitment","Applications with ✅/❌ voting, vouches and automatic closing."],
+ ["🌐","Web Control Panel","Run the whole gang from your browser. Every change applies live."],
+ ["📝","Detailed Logs","Every action routed to its own channel — clean and categorised."]
+];
+var g=document.getElementById("featGrid");
+g.innerHTML=FEATURES.map(function(f){return '<div class="feat rev"><span class="ic">'+f[0]+'</span><h3>'+f[1]+'</h3><p>'+f[2]+'</p></div>';}).join("");
+// marquee
+var words=["Roster","KOS","Strikes","Wars","Tickets","Orders","Recruitment","Radio","Logs","Web Panel"];
+var line=words.map(function(w){return '<span><b>'+w+'</b></span>';}).join('<span>✦</span>');
+document.getElementById("marqRow").innerHTML=line+'<span>✦</span>'+line;
+// spotlight hover
+document.addEventListener("mousemove",function(e){
+ var t=e.target.closest(".feat");if(!t)return;var r=t.getBoundingClientRect();
+ t.style.setProperty("--mx",(e.clientX-r.left)+"px");t.style.setProperty("--my",(e.clientY-r.top)+"px");
+});
+// reveal on scroll
+var io=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){x.target.classList.add("in");io.unobserve(x.target);}});},{threshold:.12});
+document.querySelectorAll(".rev").forEach(function(e,i){e.style.transitionDelay=(i%4*60)+"ms";io.observe(e);});
+// adapt to auth + subscription
+function setInvite(url){["heroInvite","inviteBtn2","inviteBtn3"].forEach(function(id){var el=document.getElementById(id);if(!el)return;if(url){el.href=url;el.target="_blank";el.rel="noopener";}else{el.classList.add("disabled");el.title="Invite link loads once the bot is online";}});}
+fetch("/api/me").then(function(r){return r.json();}).then(function(me){
+ var pub=me.public||{};setInvite(pub.invite_url||"");
+ var buy=document.getElementById("buyBtn"),nav=document.getElementById("navCta"),panel=document.getElementById("panelBtn");
+ var checkout=(pub.stripe)?"/billing/checkout":null;
+ if(me.authed){
+   nav.href="/panel";nav.textContent="Open panel";panel.href="/panel";
+   // find best guild (active first)
+   var gs=me.guilds||[],act=gs.find(function(x){return x.subscription&&x.subscription.active;});
+   if(act){
+     buy.textContent="Open your panel";buy.href="/panel";
+     document.getElementById("heroStatus").textContent="✓ Subscription active on "+act.name+" — open your panel";
+   }else if(checkout){buy.textContent="Subscribe — $7.99/mo";buy.href=checkout;}
+   else{buy.textContent="Open panel";buy.href="/panel";}
+ }else{
+   nav.textContent="Log in";nav.href="/login";
+   if(checkout){buy.textContent="Subscribe — $7.99/mo";buy.href="/login";}
+   else{buy.textContent="Start free trial";buy.href="/login";}
+ }
+}).catch(function(){});
+</script>
+</body></html>"""
+
+
+async def _h_landing(request):
+    return _aioweb.Response(text=_LANDING_HTML, content_type="text/html")
+
+
 def _pick_billing_guild(request):
     """Resolve the guild a billing action is for: ?guild=, else sole guild."""
     return _guild_from(request.query.get("guild"))
@@ -2106,10 +2364,10 @@ async def _h_billing_checkout(request):
 async def _h_billing_success(request):
     return _aioweb.Response(
         text="<!doctype html><meta charset=utf-8><title>Thanks</title>"
-        "<meta http-equiv=refresh content='4;url=/'>"
+        "<meta http-equiv=refresh content='4;url=/panel'>"
         "<body style='font-family:sans-serif;background:#07070a;color:#ececf1;text-align:center;padding:14vh 18px'>"
         "<h1>✅ You're subscribed</h1><p style='color:#b8b8c2'>Activation lands in a few seconds. "
-        "Taking you to the panel…</p><p><a style='color:#c9c9d2' href='/'>Open now</a></p></body>",
+        "Taking you to the panel…</p><p><a style='color:#c9c9d2' href='/panel'>Open now</a></p></body>",
         content_type="text/html",
     )
 
@@ -2334,11 +2592,12 @@ async def start_web_server() -> None:
     app = _aioweb.Application()
     app.add_routes(
         [
-            _aioweb.get("/", _h_index),
+            _aioweb.get("/", _h_landing),
+            _aioweb.get("/panel", _h_index),
             _aioweb.get("/gm-logo.png", _h_logo),
             _aioweb.get("/terms", _h_terms),
             _aioweb.get("/privacy", _h_privacy),
-            _aioweb.get("/pricing", _h_pricing),
+            _aioweb.get("/pricing", _h_landing),
             _aioweb.get("/billing/checkout", _h_billing_checkout),
             _aioweb.get("/billing/success", _h_billing_success),
             _aioweb.post("/billing/webhook", _h_billing_webhook),
@@ -2860,13 +3119,24 @@ async function boot(){
     else gate("","Gang Manager","Log in with Discord to manage the roster, stash, KOS, strikes and more.",'<a href="/login"><button class="discordbtn">'+DSVG+' Log in with Discord</button></a>'+inviteBtn()+pricing);
     return;
   }
+  // pick an active server by default; fall back to the first
+  var active=(me.guilds||[]).filter(x=>!(x.subscription&&x.subscription.billing_enabled)||x.subscription.active);
+  var def=(active[0]||me.guilds[0]||{}).id||"";
+  var defSub=STATE.subs[def];
+  if(defSub&&defSub.billing_enabled&&!defSub.active){
+    var cl=(STATE.pub&&STATE.pub.stripe)?("/billing/checkout?guild="+encodeURIComponent(def)):"/pricing";
+    gate("🔒","Subscription needed","This server's subscription has "+(defSub.status==="expired"?"expired":"not started")+". Subscribe to unlock the panel and the bot's features.",
+      '<a href="'+cl+'"><button class="discordbtn">💳 Subscribe</button></a>'+inviteBtn()+'<a href="/logout"><button>Log out</button></a>');
+    return;
+  }
   show("gate",false);show("app",true);$("logoutBtn").style.display="";
   if(window.__recheck)clearInterval(window.__recheck);
   window.__recheck=setInterval(checkAccess,8000);
   const sel=$("guildSel");
   sel.innerHTML=me.guilds.map(x=>`<option value="${h(x.id)}">${h(x.name)}</option>`).join("");
   show("guildRow",me.guilds.length>1);
-  STATE.guild=me.guilds.length?me.guilds[0].id:"";
+  STATE.guild=def;
+  if(sel)sel.value=def;
   await reload();
 }
 function renderSubBanner(){
