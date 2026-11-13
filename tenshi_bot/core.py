@@ -988,19 +988,26 @@ def _eoi_view(store: dict[str, Any], message_id: int) -> EOIView:
 # EOI application modal (the form in your screenshot + a YouTube link)
 # --------------------------------------------------------------------------- #
 
+# (label, emoji, description) — the description shows as a subtitle under each
+# choice in the dropdown, so the menus read clearly at a glance.
 _EOI_ROLES = [
-    ("Shooter", "🔫"),
-    ("Crafter / Supplier", "🛠️"),
-    ("Money / Business", "💰"),
-    ("Whatever's needed", "🧩"),
+    ("Shooter", "🔫", "Fragging, hits, holding down turf"),
+    ("Crafter / Supplier", "🛠️", "Guns, ammo, keeping everyone stocked"),
+    ("Money / Business", "💰", "Shops, deals, running the economy"),
+    ("Whatever's needed", "🧩", "Flexible — put me where you need me"),
 ]
 _EOI_ACTIVITY = [
-    ("Every day", "🔥"),
-    ("Most days", "📅"),
-    ("A few times a week", "🕒"),
-    ("Weekends", "🎉"),
-    ("Casual", "😴"),
+    ("Every day", "🔥", "On pretty much daily"),
+    ("Most days", "📅", "5–6 days a week"),
+    ("A few times a week", "🕒", "2–4 days a week"),
+    ("Weekends", "🎉", "Mainly Saturday & Sunday"),
+    ("Casual", "😴", "Here and there when I can"),
 ]
+
+
+def _eoi_emoji(options, label: str, fallback: str) -> str:
+    """The emoji for a chosen role/activity label (lists are 3-tuples now)."""
+    return next((e for l, e, _ in options if l == label), fallback)
 
 
 async def _block_if_already_member(interaction: discord.Interaction) -> bool:
@@ -1028,42 +1035,43 @@ async def _block_if_already_member(interaction: discord.Interaction) -> bool:
     return False
 
 
-class EOIModal(discord.ui.Modal, title="Join the Gang — Expression of Interest"):
+class EOIModal(discord.ui.Modal, title="Join the Gang — Application"):
     ign = discord.ui.Label(
         text="In-game name",
-        description="Your FiveM character / RP name",
+        description="The character or RP name people know you by",
         component=discord.ui.TextInput(placeholder="e.g. Kenji Tanaka", max_length=100),
     )
     role = discord.ui.Label(
-        text="What role do you want?",
-        description="Pick what fits you best",
+        text="Which role fits you?",
+        description="Your main play-style — you can always do more later",
         component=discord.ui.Select(
-            placeholder="Choose a role…",
+            placeholder="Pick your main role…",
             required=True,
-            options=[discord.SelectOption(label=l, value=l, emoji=e) for l, e in _EOI_ROLES],
+            options=[discord.SelectOption(label=l, value=l, emoji=e, description=d) for l, e, d in _EOI_ROLES],
         ),
     )
     activity = discord.ui.Label(
         text="How active are you?",
+        description="Be honest — it just helps us place you right",
         component=discord.ui.Select(
-            placeholder="Choose how often you're on…",
+            placeholder="Pick how often you're on…",
             required=True,
-            options=[discord.SelectOption(label=l, value=l, emoji=e) for l, e in _EOI_ACTIVITY],
+            options=[discord.SelectOption(label=l, value=l, emoji=e, description=d) for l, e, d in _EOI_ACTIVITY],
         ),
     )
     montage = discord.ui.Label(
-        text="Montage(s)",
-        description="One YouTube link per line — optional",
+        text="Montage or clips",
+        description="Show us your gameplay — one YouTube link per line (optional)",
         component=discord.ui.TextInput(
             style=discord.TextStyle.paragraph,
-            placeholder="https://youtu.be/…",
+            placeholder="https://youtu.be/…\nhttps://youtu.be/…",
             required=False,
             max_length=600,
         ),
     )
     voucher = discord.ui.Label(
-        text="Vouch (optional)",
-        description="Pick a current member to vouch for you — they get a DM to confirm",
+        text="Got someone to vouch for you?",
+        description="Pick a current member — they get a DM to confirm, and their name shows on your application",
         component=discord.ui.UserSelect(
             placeholder="Choose someone to vouch for you…",
             min_values=0,
@@ -1098,8 +1106,8 @@ class EOIModal(discord.ui.Modal, title="Join the Gang — Expression of Interest
         ign = self.ign.component.value.strip()
         role = (self.role.component.values or ["—"])[0]
         activity = (self.activity.component.values or ["—"])[0]
-        role_emoji = dict(_EOI_ROLES).get(role, "🎯")
-        act_emoji = dict(_EOI_ACTIVITY).get(activity, "🔥")
+        role_emoji = _eoi_emoji(_EOI_ROLES, role, "🎯")
+        act_emoji = _eoi_emoji(_EOI_ACTIVITY, activity, "🔥")
 
         embed = discord.Embed(
             title=f"📨  Expression of Interest — {ign}",
