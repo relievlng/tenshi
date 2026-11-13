@@ -1190,7 +1190,12 @@ async def _h_me(request):
             "public": cfg,
             "user": {"id": str(uid), "owner": is_owner(uid)},
             "guilds": [
-                {"id": str(g.id), "name": g.name, "subscription": _sub_public(g.id)}
+                {
+                    "id": str(g.id),
+                    "name": g.name,
+                    "subscription": _sub_public(g.id),
+                    "can_setup": _can_setup(g, uid),
+                }
                 for g in guilds
             ],
         }
@@ -1300,6 +1305,36 @@ async def _gate(request, guild, allow_disabled: bool = False) -> tuple[bool, int
             return (False, 503, "The website panel is turned off for this server.")
         if not is_active(guild.id):
             return (False, 402, "This server's subscription has expired.")
+    return (True, 200, "")
+
+
+def _can_setup(guild, uid) -> bool:
+    """Only the server owner, whoever bought the subscription, or the bot
+    operator may change settings — not every admin or allowlisted member."""
+    try:
+        uid = int(uid)
+    except (TypeError, ValueError):
+        return False
+    if is_owner(uid):  # bot operator (BOT_OWNER_IDS)
+        return True
+    if getattr(guild, "owner_id", None) == uid:
+        return True
+    sub = guild_store(DATA, guild.id).get("subscription") or {}
+    pid = sub.get("purchaser_id")
+    try:
+        return bool(pid) and int(pid) == uid
+    except (TypeError, ValueError):
+        return False
+
+
+async def _setup_gate(request, guild) -> tuple[bool, int, str]:
+    """Panel access (allow_disabled) AND setup-owner — for config endpoints."""
+    ok, code, msg = await _gate(request, guild, True)
+    if not ok:
+        return (ok, code, msg)
+    uid = _read_session(request.cookies.get(_COOKIE))
+    if not _can_setup(guild, uid):
+        return (False, 403, "Only the server owner can change settings.")
     return (True, 200, "")
 
 
@@ -2382,7 +2417,9 @@ async def _h_billing_checkout(request):
         ("cancel_url", f"{base}/pricing"),
         ("client_reference_id", str(guild.id)),
         ("metadata[guild_id]", str(guild.id)),
+        ("metadata[purchaser_id]", str(uid)),
         ("subscription_data[metadata][guild_id]", str(guild.id)),
+        ("subscription_data[metadata][purchaser_id]", str(uid)),
         ("allow_promotion_codes", "true"),
     ]
     session = await _stripe_post("checkout/sessions", form)
@@ -2436,6 +2473,16 @@ def _event_guild_id(obj: dict) -> int | None:
     return None
 
 
+def _event_meta(obj: dict, key: str):
+    for path in ((("metadata", key)), ("subscription_details", "metadata", key)):
+        cur = obj
+        for k in path:
+            cur = cur.get(k) if isinstance(cur, dict) else None
+        if cur:
+            return cur
+    return None
+
+
 async def _h_billing_webhook(request):
     secret = os.getenv("STRIPE_WEBHOOK_SECRET")
     payload = await request.read()
@@ -2461,6 +2508,7 @@ async def _h_billing_webhook(request):
                 status="active",
                 customer_id=obj.get("customer"),
                 sub_id=obj.get("subscription") or obj.get("id"),
+                purchaser_id=_event_meta(obj, "purchaser_id"),
             )
             g = bot.get_guild(gid)
             if g is not None:
@@ -2488,7 +2536,7 @@ async def _h_web_toggle(request):
     guild = _guild_from(request.query.get("guild"))
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
-    ok, code, msg = await _gate(request, guild, allow_disabled=True)
+    ok, code, msg = await _setup_gate(request, guild)
     if not ok:
         return _aioweb.json_response({"error": msg}, status=code)
     store = guild_store(DATA, guild.id)
@@ -2582,7 +2630,7 @@ async def _h_web_member_add(request):
     guild = _guild_from(request.query.get("guild"))
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
-    ok, code, msg = await _gate(request, guild, allow_disabled=True)
+    ok, code, msg = await _setup_gate(request, guild)
     if not ok:
         return _aioweb.json_response({"error": msg}, status=code)
     try:
@@ -2615,7 +2663,7 @@ async def _h_web_member_remove(request):
     guild = _guild_from(request.query.get("guild"))
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
-    ok, code, msg = await _gate(request, guild, allow_disabled=True)
+    ok, code, msg = await _setup_gate(request, guild)
     if not ok:
         return _aioweb.json_response({"error": msg}, status=code)
     try:
@@ -2641,7 +2689,7 @@ async def _h_settings(request):
     guild = _guild_from(request.query.get("guild"))
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
-    ok, code, msg = await _gate(request, guild, allow_disabled=True)
+    ok, code, msg = await _setup_gate(request, guild)
     if not ok:
         return _aioweb.json_response({"error": msg}, status=code)
     store = guild_store(DATA, guild.id)
@@ -2652,7 +2700,7 @@ async def _h_setting_set(request):
     guild = _guild_from(request.query.get("guild"))
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
-    ok, code, msg = await _gate(request, guild, allow_disabled=True)
+    ok, code, msg = await _setup_gate(request, guild)
     if not ok:
         return _aioweb.json_response({"error": msg}, status=code)
     try:
@@ -3239,7 +3287,7 @@ async function boot(){
   let me;try{me=await api("/api/me");}catch(e){gate("⚠️","Can't connect","Couldn't reach the server — try again.","<button onclick='boot()'>Retry</button>");return;}
   applyBrand(me.brand);
   STATE.pub=me.public||{};STATE.owner=!!(me.user&&me.user.owner);
-  STATE.subs={};(me.guilds||[]).forEach(x=>{STATE.subs[x.id]=x.subscription||null;});
+  STATE.subs={};STATE.canSetup={};(me.guilds||[]).forEach(x=>{STATE.subs[x.id]=x.subscription||null;STATE.canSetup[x.id]=!!x.can_setup;});
   if(!me.authed){
     var pricing='<a href="/pricing"><button class="ghost">💳 Pricing</button></a>';
     if(me.reason==="not_configured") gate("⚙️","Setup needed","The owner still needs to set DISCORD_CLIENT_SECRET before anyone can log in.",inviteBtn()+pricing);
@@ -3298,6 +3346,9 @@ async function reload(){
     STATE.members=ro.members||[];STATE.ranks=ro.ranks||[];STATE.kos=ko.members||[];STATE.rank_order=ro.rank_order||[];STATE.stash=stn.items||[];STATE.stashTotal=stn.total||0;STATE.wars=wa.wars||[];STATE.eois=eo.eois||[];STATE.strikes=sk.members||[];STATE.strikeLimit=sk.limit||3;STATE.orders=od.orders||[];STATE.ticketTypes=od.types||[];STATE.ticketsOpen=od.open!==false;
     STATE.settings=null;
     renderSubBanner();
+    var cs=STATE.canSetup&&STATE.canSetup[STATE.guild];
+    var stab=document.querySelector('.tab[data-tab="settings"]');if(stab)stab.style.display=cs?"":"none";
+    if(!cs&&TAB==="settings")setTab("roster");
     render();
   }catch(e){ if(e.status===401||e.status===403) return boot(); toast(e.message||"Failed to load.","err"); }
 }

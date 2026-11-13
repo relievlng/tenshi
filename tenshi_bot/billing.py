@@ -132,6 +132,7 @@ def grant(
     status: str = "active",
     customer_id: str | None = None,
     sub_id: str | None = None,
+    purchaser_id: str | int | None = None,
     lifetime: bool = False,
 ) -> dict:
     """Activate or extend a server's subscription.
@@ -154,6 +155,8 @@ def grant(
         sub["customer_id"] = customer_id
     if sub_id:
         sub["sub_id"] = sub_id
+    if purchaser_id:
+        sub["purchaser_id"] = str(purchaser_id)
     sub["updated_at"] = now.isoformat()
     save_data(DATA)
     log.info("subscription grant guild=%s plan=%s lifetime=%s days=%s", guild_id, plan, lifetime, days)
