@@ -1170,24 +1170,30 @@ def _managed_server(uid: str, gid: str) -> dict | None:
 def _movable_sub_for(uid, exclude_gid=None) -> "dict | None":
     """A server the user manages whose ACTIVE, paid/lifetime subscription could be
     moved to another server. Returns {'id','name','mode'} or None. Powers the
-    'move my subscription here' option so nobody pays twice to switch servers."""
-    entry = _USER_CACHE.get(str(uid)) or {}
-    ex = str(exclude_gid) if exclude_gid is not None else None
-    for g in entry.get("guilds") or []:
-        if ex is not None and g["id"] == ex:
-            continue
-        try:
-            perms = int(g["permissions"])
-        except (TypeError, ValueError):
-            perms = 0
-        if not (g["owner"] or perms & (_PERM_ADMIN | _PERM_MANAGE_GUILD)):
-            continue
-        if not peek_active(g["id"]):
-            continue
-        st = effective_state(int(g["id"]))
-        if st["mode"] not in ("paid", "lifetime"):
-            continue  # only a real subscription is worth moving
-        return {"id": g["id"], "name": g["name"], "mode": st["mode"]}
+    'move my subscription here' option so nobody pays twice to switch servers.
+
+    Wrapped so it can never break /api/me — on any hiccup it just returns None."""
+    try:
+        entry = _USER_CACHE.get(str(uid)) or {}
+        ex = str(exclude_gid) if exclude_gid is not None else None
+        for g in entry.get("guilds") or []:
+            if ex is not None and g.get("id") == ex:
+                continue
+            try:
+                perms = int(g.get("permissions") or 0)
+            except (TypeError, ValueError):
+                perms = 0
+            if not (g.get("owner") or perms & (_PERM_ADMIN | _PERM_MANAGE_GUILD)):
+                continue
+            gid = g.get("id")
+            if not gid or not peek_active(gid):
+                continue
+            st = effective_state(int(gid))
+            if st["mode"] not in ("paid", "lifetime"):
+                continue  # only a real subscription is worth moving
+            return {"id": gid, "name": g.get("name") or "your other server", "mode": st["mode"]}
+    except Exception as exc:  # noqa: BLE001 — never let this break the panel
+        log.warning("_movable_sub_for failed for %s: %s", uid, exc)
     return None
 
 
@@ -4401,44 +4407,63 @@ function showSubGate(gid){
     move+
     `<div class="gaterow">${multi}<a href="/logout"><button class="ghost">Log out</button></a></div>`,true);
 }
+function apiTO(path,ms){
+  // like api(), but gives up after `ms` so a stalled request can never spin forever
+  var ctrl=("AbortController" in window)?new AbortController():null;
+  var timer=ctrl?setTimeout(function(){try{ctrl.abort();}catch(e){}},ms):null;
+  return api(path,ctrl?{signal:ctrl.signal}:{}).finally(function(){if(timer)clearTimeout(timer);});
+}
+var _bootRetryActions="<button onclick='boot()'>↻ Retry</button><a href='/logout'><button class='ghost'>Log out</button></a>";
 async function boot(){
-  let me;try{me=await api("/api/me");}catch(e){gate("⚠️","Can't connect","Couldn't reach the server — try again.","<button onclick='boot()'>Retry</button>");return;}
-  applyBrand(me.brand);
-  STATE.pub=me.public||{};STATE.owner=!!(me.user&&me.user.owner);STATE.me=me;STATE.moveFrom=me.move_from||null;
-  STATE.subs={};STATE.canSetup={};STATE.guildNames={};
-  (me.guilds||[]).forEach(x=>{STATE.subs[x.id]=x.subscription||null;STATE.canSetup[x.id]=!!x.can_setup;STATE.guildNames[x.id]=x.name;});
-  renderUser(me.user);
-  if(!me.authed){
-    var pricing=`<a href="/#pricing"><button class="ghost">💳 Pricing</button></a>`;
-    if(me.reason==="not_configured") gate("⚙️","Setup needed","The site owner still needs to finish setting up Discord login.",pricing);
-    else if(me.reason==="no_access"){
-      if(Array.isArray(me.servers)) showPicker(me);
-      else gate("➕","Add your server","Log in again to load your servers, or add Gang Manager to a server you own.",
-        `<a href="/login"><button class="discordbtn">${DSVG} Load my servers</button></a><div class="gaterow"><button class="ghost" onclick="boot()">↻ Refresh</button><a href="/logout"><button class="ghost">Log out</button></a></div>`);
-    }
-    else gate("","Gang Manager","Log in with Discord to set up and run your gang from the browser.",`<a href="/login"><button class="discordbtn">${DSVG} Log in with Discord</button></a>`+pricing);
+  let me;
+  try{ me=await apiTO("/api/me",12000); }
+  catch(e){
+    var why=(e&&e.name==="AbortError")
+      ? "The server didn't respond in time — the bot may be restarting."
+      : ("Couldn't reach the server"+(e&&e.message?": "+e.message:"")+".");
+    gate("⚠️","Can't load the panel",why+" Give it a moment, then retry.",_bootRetryActions);
     return;
   }
-  // pick an active server by default; fall back to the first
-  var wantPicker=location.hash==="#servers";
-  if(wantPicker){try{history.replaceState(null,"",location.pathname);}catch(e){}}
-  if(wantPicker&&Array.isArray(me.servers)){showPicker(me,true);return;}
-  var active=(me.guilds||[]).filter(x=>!(x.subscription&&x.subscription.billing_enabled)||x.subscription.active);
-  var pref=STATE.prefGuild&&(me.guilds||[]).find(x=>x.id===STATE.prefGuild);STATE.prefGuild=null;
-  var def=((pref||active[0]||me.guilds[0])||{}).id||"";
-  var defSub=STATE.subs[def];
-  // the bot owner skips the subscribe screen so they can comp servers in Settings
-  if(defSub&&defSub.billing_enabled&&!defSub.active&&!STATE.owner){ STATE.guild=def; showSubGate(def); return; }
-  show("gate",false);show("app",true);$("logoutBtn").style.display="";
-  var hib=$("headerInvite");if(hib)hib.style.display="";
-  if(window.__recheck)clearInterval(window.__recheck);
-  window.__recheck=setInterval(checkAccess,8000);
-  const sel=$("guildSel");
-  sel.innerHTML=me.guilds.map(x=>`<option value="${h(x.id)}">${h(x.name)}</option>`).join("");
-  show("guildRow",me.guilds.length>1);
-  STATE.guild=def;
-  if(sel)sel.value=def;
-  await reload();
+  try{
+    applyBrand(me.brand);
+    STATE.pub=me.public||{};STATE.owner=!!(me.user&&me.user.owner);STATE.me=me;STATE.moveFrom=me.move_from||null;
+    STATE.subs={};STATE.canSetup={};STATE.guildNames={};
+    (me.guilds||[]).forEach(x=>{STATE.subs[x.id]=x.subscription||null;STATE.canSetup[x.id]=!!x.can_setup;STATE.guildNames[x.id]=x.name;});
+    renderUser(me.user);
+    if(!me.authed){
+      var pricing=`<a href="/#pricing"><button class="ghost">💳 Pricing</button></a>`;
+      if(me.reason==="not_configured") gate("⚙️","Setup needed","The site owner still needs to finish setting up Discord login.",pricing);
+      else if(me.reason==="no_access"){
+        if(Array.isArray(me.servers)) showPicker(me);
+        else gate("➕","Add your server","Log in again to load your servers, or add Gang Manager to a server you own.",
+          `<a href="/login"><button class="discordbtn">${DSVG} Load my servers</button></a><div class="gaterow"><button class="ghost" onclick="boot()">↻ Refresh</button><a href="/logout"><button class="ghost">Log out</button></a></div>`);
+      }
+      else gate("","Gang Manager","Log in with Discord to set up and run your gang from the browser.",`<a href="/login"><button class="discordbtn">${DSVG} Log in with Discord</button></a>`+pricing);
+      return;
+    }
+    // pick an active server by default; fall back to the first
+    var wantPicker=location.hash==="#servers";
+    if(wantPicker){try{history.replaceState(null,"",location.pathname);}catch(e){}}
+    if(wantPicker&&Array.isArray(me.servers)){showPicker(me,true);return;}
+    var active=(me.guilds||[]).filter(x=>!(x.subscription&&x.subscription.billing_enabled)||x.subscription.active);
+    var pref=STATE.prefGuild&&(me.guilds||[]).find(x=>x.id===STATE.prefGuild);STATE.prefGuild=null;
+    var def=((pref||active[0]||me.guilds[0])||{}).id||"";
+    var defSub=STATE.subs[def];
+    // the bot owner skips the subscribe screen so they can comp servers in Settings
+    if(defSub&&defSub.billing_enabled&&!defSub.active&&!STATE.owner){ STATE.guild=def; showSubGate(def); return; }
+    show("gate",false);show("app",true);$("logoutBtn").style.display="";
+    var hib=$("headerInvite");if(hib)hib.style.display="";
+    if(window.__recheck)clearInterval(window.__recheck);
+    window.__recheck=setInterval(checkAccess,8000);
+    const sel=$("guildSel");
+    sel.innerHTML=me.guilds.map(x=>`<option value="${h(x.id)}">${h(x.name)}</option>`).join("");
+    show("guildRow",me.guilds.length>1);
+    STATE.guild=def;
+    if(sel)sel.value=def;
+    await reload();
+  }catch(err){
+    gate("⚠️","Panel error","The panel hit a snag while loading"+(err&&err.message?": "+err.message:"")+". Retry, or log out and back in.",_bootRetryActions);
+  }
 }
 function renderSubBanner(){
   var el=$("subBanner");if(!el)return;
