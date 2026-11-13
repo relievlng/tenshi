@@ -1265,16 +1265,10 @@ def _guild_from(gid: str | None):
         return None
 
 
-# Changes each deploy (set when the module loads) — shown tiny in the footer so
-# we can confirm the browser is running the latest panel code, not a cached copy.
-_PANEL_BUILD = time.strftime("%m%d-%H%M", time.gmtime())
-
-
 async def _h_index(request):
     base = _canonical_base(request)
     note_base_url(base)  # so links the bot posts point here
     page = _PAGE_HTML.replace("<!--GM_HEAD-->", _head_meta(base, "Gang Manager · Panel", _SITE_DESC), 1)
-    page = page.replace("made by pmxl</footer>", f"made by pmxl · build {_PANEL_BUILD}</footer>", 1)
     # never let the browser serve a stale panel page (old JS = stuck panels)
     return _aioweb.Response(
         text=page, content_type="text/html",
