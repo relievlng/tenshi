@@ -4207,7 +4207,8 @@ async function boot(){
   var pref=STATE.prefGuild&&(me.guilds||[]).find(x=>x.id===STATE.prefGuild);STATE.prefGuild=null;
   var def=((pref||active[0]||me.guilds[0])||{}).id||"";
   var defSub=STATE.subs[def];
-  if(defSub&&defSub.billing_enabled&&!defSub.active){ STATE.guild=def; showSubGate(def); return; }
+  // the bot owner skips the subscribe screen so they can comp servers in Settings
+  if(defSub&&defSub.billing_enabled&&!defSub.active&&!STATE.owner){ STATE.guild=def; showSubGate(def); return; }
   show("gate",false);show("app",true);$("logoutBtn").style.display="";
   var hib=$("headerInvite");if(hib)hib.style.display="";
   if(window.__recheck)clearInterval(window.__recheck);
