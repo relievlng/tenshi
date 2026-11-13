@@ -3304,6 +3304,13 @@ function gate(icon,title,text,actions){
   $("gate").innerHTML=`<div class="gatecard"><div class="gicon">${logo}${badge}</div><h2>${h(title)}</h2><p class="muted">${h(text)}</p><div id="gateActions">${actions||""}</div></div>`;
 }
 function inviteBtn(){var u=(STATE.pub&&STATE.pub.invite_url)||"";return u?'<a href="'+h(u)+'" target="_blank" rel="noopener"><button class="ghost">➕ Add to your server</button></a>':"";}
+function showSubGate(gid){
+  var s=STATE.subs[gid]||{};
+  var cl=(STATE.pub&&STATE.pub.stripe)?("/billing/checkout?guild="+encodeURIComponent(gid)):"/pricing";
+  var multi=Object.keys(STATE.subs||{}).length>1?'<button onclick="boot()">↻ Back</button>':"";
+  gate("🔒","Subscription needed","This server's subscription has "+(s.status==="expired"?"expired":"not started")+". Subscribe to unlock the panel and the bot's features.",
+    '<a href="'+cl+'"><button class="discordbtn">💳 Subscribe</button></a>'+inviteBtn()+multi+'<a href="/logout"><button>Log out</button></a>');
+}
 async function boot(){
   let me;try{me=await api("/api/me");}catch(e){gate("⚠️","Can't connect","Couldn't reach the server — try again.","<button onclick='boot()'>Retry</button>");return;}
   applyBrand(me.brand);
@@ -3320,12 +3327,7 @@ async function boot(){
   var active=(me.guilds||[]).filter(x=>!(x.subscription&&x.subscription.billing_enabled)||x.subscription.active);
   var def=(active[0]||me.guilds[0]||{}).id||"";
   var defSub=STATE.subs[def];
-  if(defSub&&defSub.billing_enabled&&!defSub.active){
-    var cl=(STATE.pub&&STATE.pub.stripe)?("/billing/checkout?guild="+encodeURIComponent(def)):"/pricing";
-    gate("🔒","Subscription needed","This server's subscription has "+(defSub.status==="expired"?"expired":"not started")+". Subscribe to unlock the panel and the bot's features.",
-      '<a href="'+cl+'"><button class="discordbtn">💳 Subscribe</button></a>'+inviteBtn()+'<a href="/logout"><button>Log out</button></a>');
-    return;
-  }
+  if(defSub&&defSub.billing_enabled&&!defSub.active){ STATE.guild=def; showSubGate(def); return; }
   show("gate",false);show("app",true);$("logoutBtn").style.display="";
   if(window.__recheck)clearInterval(window.__recheck);
   window.__recheck=setInterval(checkAccess,8000);
@@ -3371,7 +3373,7 @@ async function reload(){
     var stab=document.querySelector('.tab[data-tab="settings"]');if(stab)stab.style.display=cs?"":"none";
     if(!cs&&TAB==="settings")setTab("roster");
     render();
-  }catch(e){ if(e.status===401||e.status===403) return boot(); toast(e.message||"Failed to load.","err"); }
+  }catch(e){ if(e.status===401||e.status===403) return boot(); if(e.status===402) return showSubGate(STATE.guild); toast(e.message||"Failed to load.","err"); }
 }
 function countUp(el,to){
   to=Number(to); if(isNaN(to)){el.textContent=arguments[1];return;}
