@@ -589,6 +589,15 @@ def _bar(n: float, total: float, width: int = 12) -> str:
     return "█" * k + "░" * (width - k)
 
 
+def _vote_bar(yes: int, no: int, width: int = 10) -> str:
+    """Green/red split bar for a yes/no vote, e.g. 🟩🟩🟩🟩🟩🟩🟥🟥🟥🟥."""
+    total = yes + no
+    if total <= 0:
+        return "⬜" * width
+    g = max(0, min(width, round(width * yes / total)))
+    return "🟩" * g + "🟥" * (width - g)
+
+
 def _daily_counts(timestamps, days: int = 14) -> list[int]:
     """How many timestamps fell on each of the last `days` UTC days (oldest first)."""
     today = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) // 86400
@@ -808,6 +817,105 @@ def _set_embed_field(embed: discord.Embed, name: str, value: str, inline: bool =
     embed.add_field(name=name, value=value, inline=inline)
 
 
+def _eoi_card(store: dict, mid, guild, *, app=None, votes=None, timer=None, vouch=None) -> discord.Embed:
+    """Build the EOI application card from stored state — the single source of
+    truth, rebuilt on every vote / timer change / vouch / close so the post
+    always carries the same premium Components-V2 look as the rest of the bot.
+
+    Pass ``app``/``timer`` directly to render before the post has a message id."""
+    sid = str(mid)
+    app = app if app is not None else (store.get("eoi_apps", {}) or {}).get(sid, {})
+    votes = votes if votes is not None else (store.get("eoi_votes", {}) or {}).get(sid, {})
+    timer = timer if timer is not None else (store.get("eoi_timers", {}) or {}).get(sid, {})
+    vouch = vouch if vouch is not None else (store.get("eoi_vouches", {}) or {}).get(sid, {})
+
+    yes = sum(1 for v in votes.values() if v == "yes")
+    no = sum(1 for v in votes.values() if v == "no")
+    closed = bool(app.get("closed") or timer.get("done"))
+    passed = app.get("passed")
+
+    uid = app.get("user_id")
+    ign = app.get("ign") or "—"
+    role = app.get("role") or "—"
+    role_emoji = app.get("role_emoji") or "🎯"
+    activity = app.get("activity") or "—"
+    act_emoji = app.get("act_emoji") or "🔥"
+
+    if closed:
+        color = OK if passed else MUTED
+        head = ("✅  ACCEPTED" if passed else "❌  DENIED") if passed is not None else "🔒  CLOSED"
+        title = f"{head} · {ign}"
+    else:
+        color, title = EMBED_COLOR, f"📨  Application · {ign}"
+
+    desc = (f"<@{uid}> wants in as {role_emoji} **{role}**" if uid
+            else f"Wants in as {role_emoji} **{role}**")
+    ts = app.get("ts")
+    embed = discord.Embed(
+        title=title,
+        description=desc,
+        color=color,
+        timestamp=datetime.datetime.fromtimestamp(ts, datetime.timezone.utc) if ts else None,
+    )
+    if app.get("author_name"):
+        embed.set_author(name=app["author_name"], icon_url=app.get("avatar"))
+    if app.get("avatar"):
+        embed.set_thumbnail(url=app["avatar"])
+
+    embed.add_field(name="🎯 Role", value=f"{role_emoji} {role}", inline=True)
+    embed.add_field(name="⏱️ Active", value=f"{act_emoji} {activity}", inline=True)
+    if app.get("account_ts"):
+        embed.add_field(name="🗓️ Account", value=f"<t:{app['account_ts']}:R>", inline=True)
+    if app.get("joined_ts"):
+        embed.add_field(name="📥 Joined", value=f"<t:{app['joined_ts']}:R>", inline=True)
+
+    vstatus = vouch.get("status")
+    vmention = f"<@{vouch.get('voucher_id')}>" if vouch.get("voucher_id") else None
+    if vstatus == "accepted":
+        vval = f"✅ Vouched by {vmention}"
+    elif vstatus == "declined":
+        vval = f"✖️ Declined by {vmention}"
+    elif vstatus == "pending":
+        vval = f"⏳ Pending — {vmention}"
+    else:
+        vval = "—"
+    embed.add_field(name=_EOI_VOUCH_FIELD, value=vval, inline=True)
+
+    lines = app.get("montage_lines") or []
+    if lines:
+        embed.add_field(
+            name=f"🎬 Montage{'s' if app.get('montage_count', 1) > 1 else ''}",
+            value="\n".join(lines)[:1024], inline=False,
+        )
+    if app.get("montage_image"):
+        embed.set_image(url=app["montage_image"])
+        if not closed and app.get("montage_watch"):
+            embed.description += f"\n\n🎬 **[▶  Watch montage]({app['montage_watch']})**"
+
+    total = yes + no
+    tally = f"✅ **{yes}**     ❌ **{no}**"
+    if total:
+        tally += f"\n{_vote_bar(yes, no)}  ·  {round(100 * yes / total)}% in favour"
+    embed.add_field(name="🗳️ Community vote", value=tally, inline=False)
+
+    if closed:
+        when = app.get("closed_ts")
+        embed.add_field(
+            name="🏁 Result",
+            value=(("✅ **Accepted**" if passed else "❌ **Denied**") if passed is not None else "🔒 **Closed**")
+            + (f" · <t:{when}:R>" if when else ""),
+            inline=False,
+        )
+    elif timer.get("ends"):
+        ends = timer["ends"]
+        embed.add_field(
+            name=_EOI_TIMER_FIELD,
+            value=f"<t:{ends}:R> · <t:{ends}:f>\n-# auto-closes — leadership can change below",
+            inline=False,
+        )
+    return _brand(embed, guild)
+
+
 class EOIView(GatedView):
     """Yes / No voting buttons attached to an EOI application embed.
 
@@ -871,9 +979,8 @@ class EOIView(GatedView):
         yes = sum(1 for v in record.values() if v == "yes")
         no = sum(1 for v in record.values() if v == "no")
 
-        embed = msg.embeds[0] if msg.embeds else discord.Embed()
-        embed.set_footer(text=f"✅ {yes}   •   ❌ {no}")
-        await msg.edit(embed=embed, view=EOIView(yes, no))
+        card = _eoi_card(store, msg.id, interaction.guild)
+        await _edit_card(msg, [card], lambda: _eoi_view(store, msg.id))
 
         if previous == choice:
             note = f"Your **{choice.upper()}** vote is already counted."
@@ -962,9 +1069,8 @@ class EOIView(GatedView):
         ends = int(datetime.datetime.now(datetime.timezone.utc).timestamp()) + hours * 3600
         rec.update({"ends": ends, "channel_id": interaction.channel_id, "set_by": interaction.user.id})
         save_data(DATA)
-        embed = msg.embeds[0] if msg.embeds else discord.Embed()
-        _set_embed_field(embed, _EOI_TIMER_FIELD, f"<t:{ends}:R> · <t:{ends}:f>")
-        await msg.edit(embed=embed, view=_eoi_view(store, msg.id))
+        card = _eoi_card(store, msg.id, interaction.guild)
+        await _edit_card(msg, [card], lambda: _eoi_view(store, msg.id))
         await interaction.followup.send(f"⏱️ Voting closes <t:{ends}:R>.", ephemeral=True)
         await send_log(
             interaction.guild, store, f"⏱️ EOI voting timer set — closes <t:{ends}:R>.",
@@ -1109,93 +1215,60 @@ class EOIModal(discord.ui.Modal, title="Join the Gang — Application"):
         role_emoji = _eoi_emoji(_EOI_ROLES, role, "🎯")
         act_emoji = _eoi_emoji(_EOI_ACTIVITY, activity, "🔥")
 
-        embed = discord.Embed(
-            title=f"📨  Expression of Interest — {ign}",
-            description=f"{user.mention} wants in as {role_emoji} **{role}**",
-            color=EMBED_COLOR,
-            timestamp=datetime.datetime.now(datetime.timezone.utc),
-        )
-        embed.set_author(name=user.display_name, icon_url=user.display_avatar.url)
-        embed.set_thumbnail(url=user.display_avatar.url)
-        embed.add_field(name="🎮 In-game", value=ign or "—", inline=True)
-        embed.add_field(name="🎯 Role", value=f"{role_emoji} {role}", inline=True)
-        embed.add_field(name="⏱️ Activity", value=f"{act_emoji} {activity}", inline=True)
-        embed.add_field(
-            name="👤 Applicant",
-            value=f"`{user}` · `{user.id}`",
-            inline=False,
-        )
-        embed.add_field(
-            name="🗓️ Account made", value=f"<t:{int(user.created_at.timestamp())}:R>", inline=True
-        )
-        joined = getattr(user, "joined_at", None)
-        embed.add_field(
-            name="📥 Joined server",
-            value=f"<t:{int(joined.timestamp())}:R>" if joined else "—",
-            inline=True,
-        )
-        embed.add_field(name=_EOI_VOUCH_FIELD, value="—", inline=True)
+        # Pre-render the montage links once so the card can be rebuilt later (on
+        # each vote / timer change / vouch / close) without re-fetching YouTube.
         montage_raw = self.montage.component.value.strip()
         links = [ln.strip() for ln in montage_raw.splitlines() if ln.strip()][:5]
         previews = await asyncio.gather(*(youtube_preview(ln) for ln in links))
-        lines = []
+        mlines = []
         for ln, pv in zip(links, previews):
             if pv is None:
-                lines.append(f"🔗 {ln}")
+                mlines.append(f"🔗 {ln}")
                 continue
             title = _md_link_text(pv["title"]) if pv["title"] else "Watch montage"
             line = f"▶️ **[{title}]({pv['url']})**"
             if pv["author"]:
                 line += f"\n╰ by {discord.utils.escape_markdown(pv['author'])}"
-            lines.append(line)
-        embed.add_field(
-            name=f"🎬 Montage{'s' if len(links) > 1 else ''}",
-            value="\n".join(lines)[:1024] if lines else "—",
-            inline=False,
-        )
-        # Big preview: the first YouTube montage's thumbnail, with a watch link
-        # up top so it's the first thing voters see.
+            mlines.append(line)
         first = next((pv for pv in previews if pv), None)
-        if first:
-            embed.set_image(url=first["image"])
-            embed.description += f"\n\n🎬 **[▶  Watch montage]({first['url']})**"
-        # Every EOI auto-closes after 24h; leadership can change it with the
-        # dropdown below.
-        default_ends = (
-            int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-            + _EOI_DEFAULT_HOURS * 3600
-        )
-        embed.add_field(
-            name=_EOI_TIMER_FIELD,
-            value=f"<t:{default_ends}:R> · <t:{default_ends}:f>\n-# auto {_EOI_DEFAULT_HOURS}h — leadership can change below",
-            inline=False,
-        )
-        embed.set_footer(text="✅ 0   •   ❌ 0")
 
-        ping_id = store.get("eoi_ping_role_id")
-        ping_role = interaction.guild.get_role(ping_id) if ping_id else None
-        posted = await channel.send(
-            content=f"{ping_role.mention} 📨 New EOI from {interaction.user.mention}"
-            if ping_role
-            else None,
-            embed=embed,
-            view=EOIView(0, 0),
-            allowed_mentions=discord.AllowedMentions(roles=True, users=False),
-        )
-        store.setdefault("eoi_apps", {})[str(posted.id)] = {
+        now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+        default_ends = now + _EOI_DEFAULT_HOURS * 3600
+        joined = getattr(user, "joined_at", None)
+        app = {
             "user_id": user.id,
             "ign": ign,
             "role": role,
-            "ts": int(datetime.datetime.now(datetime.timezone.utc).timestamp()),
+            "role_emoji": role_emoji,
+            "activity": activity,
+            "act_emoji": act_emoji,
+            "author_name": user.display_name,
+            "avatar": user.display_avatar.url,
+            "account_ts": int(user.created_at.timestamp()),
+            "joined_ts": int(joined.timestamp()) if joined else None,
+            "montage_lines": mlines,
+            "montage_count": len(links),
+            "montage_image": first["image"] if first else None,
+            "montage_watch": first["url"] if first else None,
+            "ts": now,
         }
-        # Arm the automatic 24h close. The dropdown overwrites this if leadership
-        # picks a different length.
-        store.setdefault("eoi_timers", {})[str(posted.id)] = {
-            "ends": default_ends,
-            "channel_id": channel.id,
-            "set_by": None,
-        }
-        save_data(DATA)
+        timer_rec = {"ends": default_ends, "channel_id": channel.id, "set_by": None}
+
+        ping_id = store.get("eoi_ping_role_id")
+        ping_role = interaction.guild.get_role(ping_id) if ping_id else None
+        ping = f"{ping_role.mention} 📨 New application from {user.mention}" if ping_role else None
+
+        # Render from the staged record (no message id yet), then post as a V2 card.
+        card = _eoi_card(store, 0, interaction.guild, app=app, votes={}, timer=timer_rec, vouch={})
+        posted = await _send_card(
+            channel, [card], lambda: EOIView(0, 0),
+            header=ping,
+            allowed_mentions=discord.AllowedMentions(roles=True, users=True),
+        )
+        if posted is not None:
+            store.setdefault("eoi_apps", {})[str(posted.id)] = app
+            store.setdefault("eoi_timers", {})[str(posted.id)] = timer_rec
+            save_data(DATA)
 
         # Optional vouch picked right in the form.
         vouch_vals = self.voucher.component.values
@@ -1255,23 +1328,21 @@ async def _close_eoi(
     uid = app.get("user_id")
     now = int(datetime.datetime.now(datetime.timezone.utc).timestamp())
 
+    # Mark the stored record closed so the rebuilt card renders the result.
+    if app:
+        app["closed"] = True
+        app["passed"] = bool(passed)
+        app["closed_ts"] = now
+        save_data(DATA)
+
     msg = None
     try:
         msg = await ch.fetch_message(mid)
     except discord.HTTPException:
         pass
-    if msg is not None and msg.embeds:
-        e = msg.embeds[0]
-        e.colour = discord.Colour(OK if passed else MUTED)
-        e.title = (("✅  ACCEPTED · " if passed else "❌  DENIED · ") + (e.title or "").replace("📨  ", ""))[:256]
-        _set_embed_field(e, _EOI_TIMER_FIELD, f"🔒 Closed <t:{now}:R>")
-        _set_embed_field(
-            e, "🗳️ Result",
-            f"{'✅ **Accepted**' if passed else '❌ **Denied**'} — ✅ {yes} · ❌ {no}",
-        )
-        e.set_footer(text=f"✅ {yes}   •   ❌ {no}   •   voting closed")
+    if msg is not None:
         try:
-            await msg.edit(embed=e, view=None)
+            await _edit_card(msg, [_eoi_card(store, mid, guild)], None)
         except discord.HTTPException:
             pass
 
@@ -1411,28 +1482,22 @@ async def _handle_vouch_decision(
     voucher_mention = f"<@{voucher_id}>"
     applicant_id = rec.get("applicant_id")
 
-    # Update the EOI post so voters see the (declined) vouch.
+    # Rebuild the EOI post so voters see the (declined) vouch.
     ch = guild.get_channel(rec.get("channel_id") or 0)
     if ch is not None:
         try:
             eoi_msg = await ch.fetch_message(msg_id)
-            if eoi_msg.embeds:
-                e = eoi_msg.embeds[0]
-                _set_embed_field(
-                    e,
-                    _EOI_VOUCH_FIELD,
-                    f"✅ Vouched by {voucher_mention}"
-                    if accepted
-                    else f"✖️ Declined by {voucher_mention}",
-                    inline=True,
-                )
-                voting_done = store.get("eoi_timers", {}).get(str(msg_id), {}).get("done")
-                await eoi_msg.edit(embed=e, view=None if voting_done else _eoi_view(store, msg_id))
+            voting_done = store.get("eoi_timers", {}).get(str(msg_id), {}).get("done")
+            await _edit_card(
+                eoi_msg,
+                [_eoi_card(store, msg_id, guild)],
+                None if voting_done else (lambda: _eoi_view(store, msg_id)),
+            )
         except discord.HTTPException:
             pass
 
-    # Close out the DM.
-    result = discord.Embed(
+    # Close out the DM in the same (V2) look it was sent in.
+    result = _brand(discord.Embed(
         title="🤝 Vouch confirmed" if accepted else "Vouch declined",
         description=(
             f"You vouched for <@{applicant_id}> — your name now shows on their application. 🫡"
@@ -1440,21 +1505,20 @@ async def _handle_vouch_decision(
             else f"You declined to vouch for <@{applicant_id}>. No worries."
         ),
         color=OK if accepted else MUTED,
-    )
-    await interaction.response.edit_message(embed=result, view=None)
+    ), guild)
+    await _edit_card(interaction.message, [result], None, interaction=interaction)
 
     # Let the applicant know when a vouch lands.
     if accepted and applicant_id:
         member = guild.get_member(applicant_id)
         if member is not None:
+            note = _brand(discord.Embed(
+                title="🤝  You got a vouch!",
+                description=f"{voucher_mention} accepted your vouch on your **{guild.name}** application. 🫡",
+                color=OK,
+            ), guild)
             try:
-                await member.send(
-                    embed=discord.Embed(
-                        description=f"✅ {voucher_mention} accepted your vouch on your "
-                        f"**{guild.name}** application.",
-                        color=OK,
-                    )
-                )
+                await _send_card(member, [note])
             except discord.HTTPException:
                 pass
 
@@ -1486,9 +1550,11 @@ async def _request_vouch(
     )
     dm_embed.set_thumbnail(url=applicant.display_avatar.url)
     _brand(dm_embed, guild)
-    dm_view = _vouch_dm_view(guild.id, eoi_msg.id, voucher.id)
     try:
-        await voucher.send(embed=dm_embed, view=dm_view)
+        await _send_card(
+            voucher, [dm_embed],
+            lambda: _vouch_dm_view(guild.id, eoi_msg.id, voucher.id),
+        )
     except discord.Forbidden:
         return False
 
@@ -1501,10 +1567,11 @@ async def _request_vouch(
     save_data(DATA)
 
     try:
-        e = eoi_msg.embeds[0]
-        _set_embed_field(e, _EOI_VOUCH_FIELD, f"⏳ Pending — {voucher.mention}", inline=True)
-        await eoi_msg.edit(embed=e, view=_eoi_view(store, eoi_msg.id))
-    except (discord.HTTPException, IndexError):
+        await _edit_card(
+            eoi_msg, [_eoi_card(store, eoi_msg.id, guild)],
+            lambda: _eoi_view(store, eoi_msg.id),
+        )
+    except discord.HTTPException:
         pass
     return True
 
