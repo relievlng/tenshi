@@ -3736,6 +3736,30 @@ async def _h_setting_set(request):
 _web_started = False
 
 
+async def _h_stats(request):
+    """Public aggregate stats (counts only) for the Guard status bot to poll.
+    No auth on purpose: it exposes totals, never names, IDs or member data."""
+    active = [g for g in bot.guilds if guild_active(g.id)]
+    members = sum(g.member_count or 0 for g in active)
+    tickets = 0
+    wars = 0
+    for g in active:
+        store = guild_store(DATA, g.id)
+        tickets += sum(1 for o in store.get("orders", []) if o.get("status", "open") == "open")
+        wars += sum(1 for w in store.get("wars", []) if w.get("active", True))
+    resp = _aioweb.json_response({
+        "online": True,
+        "name": "Gang Manager",
+        "servers": len(active),
+        "members": members,
+        "wars": wars,
+        "tickets": tickets,
+        "ts": int(time.time()),
+    })
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 async def start_web_server() -> None:
     """Start the roster web server if PORT is configured. Safe to call once in
     on_ready; a no-op (with a log line) when disabled or aiohttp.web is absent."""
@@ -3764,6 +3788,7 @@ async def start_web_server() -> None:
             _aioweb.get("/privacy", _h_privacy),
             _aioweb.get("/pricing", _h_landing),
             _aioweb.get("/invite", _h_invite),
+            _aioweb.get("/api/stats", _h_stats),
             _aioweb.get("/billing/checkout", _h_billing_checkout),
             _aioweb.get("/billing/success", _h_billing_success),
             _aioweb.get("/billing/portal", _h_billing_portal),
