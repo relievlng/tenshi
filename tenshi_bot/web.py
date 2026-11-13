@@ -36,7 +36,7 @@ from .billing import (
     PLANS,
     DEFAULT_PLAN,
 )
-from .settings import CONFIG_SETTINGS, _SETTING_EMOJI, _LOG_KEYS
+from .settings import CONFIG_SETTINGS, _SETTING_EMOJI, _LOG_KEYS, ensure_log_channels
 
 try:  # aiohttp ships with discord.py; guard so the package still imports without it
     from aiohttp import web as _aioweb
@@ -1000,17 +1000,16 @@ async def _has_web_access(guild, uid, live: bool = False) -> bool:
             member = await guild.fetch_member(int(uid))
         except discord.HTTPException:
             return False
-    # The server owner and admins always get in — they're the buyer/operator and
-    # need the panel to configure the bot right after adding it.
+    # Access = the person who owns the bot in this server (its owner), the bot
+    # operator, or a member the owner has explicitly added. NOT every admin —
+    # you must own a server with the bot, or be added by someone who does.
     try:
-        if getattr(guild, "owner_id", None) == member.id:
+        if is_owner(member.id):  # bot operator (support)
             return True
-        perms = getattr(member, "guild_permissions", None)
-        if perms is not None and perms.administrator:
+        if getattr(guild, "owner_id", None) == member.id:
             return True
     except (AttributeError, TypeError):
         pass
-    # Otherwise: anyone explicitly added to the panel's member allowlist.
     allowed = guild_store(DATA, guild.id).get("web_members") or []
     try:
         return int(uid) in {int(x) for x in allowed}
@@ -2645,6 +2644,35 @@ def _web_members_list(guild: "discord.Guild", store: dict) -> dict:
     }
 
 
+async def _h_logs_setup(request):
+    """Create the Logs category + a channel per log type, from the website."""
+    guild = _guild_from(request.query.get("guild"))
+    if guild is None:
+        return _aioweb.json_response({"error": "Guild not found."}, status=404)
+    ok, code, msg = await _setup_gate(request, guild)
+    if not ok:
+        return _aioweb.json_response({"error": msg}, status=code)
+    me = getattr(guild, "me", None)
+    if me is None or not me.guild_permissions.manage_channels:
+        return _aioweb.json_response(
+            {"error": "The bot needs the Manage Channels permission to create log channels."},
+            status=400,
+        )
+    store = guild_store(DATA, guild.id)
+    try:
+        created, kept = await ensure_log_channels(guild, store)
+    except discord.HTTPException:
+        return _aioweb.json_response({"error": "Discord wouldn't let me create the channels."}, status=502)
+    save_data(DATA)
+    await send_log(
+        guild, store, f"⚙️ Log channels auto-created from the website ({len(created)} new).",
+        category="web", actor=_web_actor(request, guild),
+    )
+    return _aioweb.json_response(
+        {"ok": True, "created": len(created), "kept": len(kept), "settings": _settings_list(guild, store)}
+    )
+
+
 async def _h_web_member_add(request):
     guild = _guild_from(request.query.get("guild"))
     if guild is None:
@@ -2823,6 +2851,7 @@ async def start_web_server() -> None:
             _aioweb.post("/api/web_toggle", _h_web_toggle),
             _aioweb.post("/api/web_member_add", _h_web_member_add),
             _aioweb.post("/api/web_member_remove", _h_web_member_remove),
+            _aioweb.post("/api/logs_setup", _h_logs_setup),
         ]
     )
     runner = _aioweb.AppRunner(app)
@@ -2839,7 +2868,7 @@ _DENIED_HTML = (
     "display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center'>"
     "<div><h2>🚫 No access</h2>"
     "<p style='color:#9a9aa6'>You don't have access to this panel yet.<br>"
-    "The server owner or an admin can add you under <b>⚙️ Settings → Website access</b>.</p>"
+    "The server owner can add you under <b>⚙️ Settings → Website access</b>.</p>"
     "<p><a style='color:#9a9aa8' href='/logout'>Log out</a></p></div></body>"
 )
 
@@ -3268,7 +3297,7 @@ _PAGE_HTML = """
   <div id="settingsView" style="display:none"></div>
 </div>
 
-<footer>Only the owner, admins and members you add can open this · changes apply to Discord live · made by pmxl</footer>
+<footer>Only the owner and members they add can open this · changes apply to Discord live · made by pmxl</footer>
 
 <script>
 let STATE={members:[],ranks:[],kos:[],guild:""},TAB="roster";
@@ -3707,7 +3736,7 @@ async function renderSettings(){
       +'<button class="tgl '+(webOn?'on':'')+'" onclick="toggleWeb('+(!webOn)+')">'+(webOn?'On':'Off')+'</button></div>'
       +'<div class="muted" style="font-size:12px;margin-top:4px">Turn the whole web panel off for this server. You can switch it back on here any time.</div></div>'
     +'<div class="card"><h4>👥 Website access</h4>'
-      +'<div class="muted" style="font-size:12px;margin-bottom:8px">The server owner and admins always have access. Add any other members who should use this panel.</div>'
+      +'<div class="muted" style="font-size:12px;margin-bottom:8px">The server owner always has access. Add any members who should be able to use this panel.</div>'
       +'<div class="wmlist">'+chips+'</div>'
       +'<div class="addbar" style="margin-top:12px">'
         +'<input id="wmFilter" class="i" placeholder="Search members…" oninput="filterWM()">'
@@ -3716,8 +3745,9 @@ async function renderSettings(){
       +(( (wa.candidates||[]).length===0 )?'<div class="muted" style="font-size:12px;margin-top:6px">No members to list yet — enable the Server Members Intent to populate this, or add by selecting once they appear.</div>':'')+'</div>'
     +'<div class="card"><h4>👑 Roles</h4>'+roles.map(row).join("")+'</div>'
     +'<div class="card"><h4>📁 Channels</h4>'+mainc.map(row).join("")+'</div>'
-    +'<div class="card"><h4>📝 Log channels</h4>'
-      +'<div class="muted" style="font-size:12px;margin-bottom:6px">Tip: run <code>/settings logs_setup</code> in Discord to auto-create all of these at once.</div>'
+    +'<div class="card"><div class="setuptop"><h4 style="margin:0">📝 Log channels</h4>'
+      +'<button class="ghost" onclick="logsSetup()">⚡ Auto-create all</button></div>'
+      +'<div class="muted" style="font-size:12px;margin:6px 0">Creates a private <b>📋 Gang Manager Logs</b> category with a channel for every log type and wires them up. (Bot needs Manage Channels.)</div>'
       +logs.map(row).join("")+'</div>';
 }
 async function setSetting(key,value){
@@ -3742,6 +3772,11 @@ async function addWebMember(){
 }
 async function removeWebMember(id){
   try{const r=await post("/api/web_member_remove",{guild:STATE.guild,user_id:id});STATE.settings=r.settings;toast("Access removed","ok");renderSettings();}
+  catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
+}
+async function logsSetup(){
+  if(!confirm("Create a Logs category with a channel for every log type?"))return;
+  try{const r=await post("/api/logs_setup",{guild:STATE.guild});toast("Created "+r.created+" log channel(s)"+(r.kept?" (kept "+r.kept+")":""),"ok");STATE.settings=r.settings;renderSettings();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 boot();

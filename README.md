@@ -153,14 +153,15 @@ The screenshot scanner needs the **Tesseract** OCR engine; `nixpacks.toml`
 installs it on Railway automatically. Without it, scanning just reports
 "couldn't read any items" and manual entry still works.
 
-Access is gated by a dedicated **Website access role** (separate from
-leadership): people log in with Discord, and only those holding that role can
-open it. Access is re-checked on every action and by a fast background poll
-(fetched live from Discord, so it works even without the members intent) plus
-whenever the tab regains focus — so if someone's website-access role is taken
-away, they're logged out almost immediately. A bot cannot remove anyone's
-*server tag* — that's controlled by each user — so this manages roster roles,
-not tags.
+**Access** — you must own a server with the bot (or be added by someone who
+does). People log in with Discord, and only the **server owner** (plus the bot
+operator) can open the panel; the owner adds anyone else from **⚙️ Settings →
+Website access**. Access is re-checked on every action and by a fast background
+poll plus whenever the tab regains focus, so removing someone takes effect
+almost immediately. Everything is **set up from the website** — channels, roles,
+the on/off switch, website access, and a one-click **Auto-create** for all log
+channels — no slash commands needed. **Setup is owner-only**; added members can
+use the panel but not change settings.
 
 **Setup**
 1. In the Discord **Developer Portal → OAuth2**, copy the **Client Secret** and
@@ -168,10 +169,8 @@ not tags.
 2. In Railway, add a **public domain** (Settings → Networking → Generate Domain)
    so the service gets a URL and a `PORT`.
 3. Add service variables: `DISCORD_CLIENT_SECRET=<the secret>`.
-4. In Discord, make a role (e.g. `Web Access`) and point the bot at it:
-   `/settings role → 🌐 Website access role`. Give it to whoever should manage
-   the roster.
-5. Open `https://<your-railway-domain>/`, log in with Discord, and you're in.
+4. Open `https://<your-railway-domain>/`, add the bot from the site, log in with
+   Discord, and configure everything from the **⚙️ Settings** tab.
 
 ## Selling it: subscriptions, invite & the settings editor
 

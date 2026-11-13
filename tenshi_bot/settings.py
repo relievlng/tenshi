@@ -228,6 +228,46 @@ def _log_channel_name(setting_key: str) -> str:
     return setting_key[: -len("_channel")].replace("_", "-")  # web_log_channel -> web-log
 
 
+async def ensure_log_channels(guild: discord.Guild, store: dict[str, Any]):
+    """Create a '📋 Gang Manager Logs' category + a channel for every log type
+    that isn't already set, wiring up the settings. Returns (created, kept) where
+    created is a list of channel mentions and kept is a list of setting keys left
+    alone. The caller saves DATA and logs. Shared by the command and the website."""
+    me = guild.me
+    cat = discord.utils.get(guild.categories, name="📋 Gang Manager Logs")
+    if cat is None:
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            me: discord.PermissionOverwrite(view_channel=True, send_messages=True),
+        }
+        lead = _leadership_role(guild, store)
+        if lead is not None:
+            overwrites[lead] = discord.PermissionOverwrite(view_channel=True)
+        try:
+            cat = await guild.create_category(
+                "📋 Gang Manager Logs", overwrites=overwrites, reason="Log channels setup"
+            )
+        except discord.HTTPException:
+            cat = None
+    created: list[str] = []
+    kept: list[str] = []
+    for k in _LOG_KEYS:
+        skey = CONFIG_SETTINGS[k][1]
+        cur = store.get(skey)
+        if cur and guild.get_channel(cur) is not None:
+            kept.append(k)
+            continue
+        try:
+            ch = await guild.create_text_channel(
+                _log_channel_name(k), category=cat, reason="Log channel setup"
+            )
+            store[skey] = ch.id
+            created.append(ch.mention)
+        except discord.HTTPException:
+            pass
+    return created, kept
+
+
 @settings_group.command(
     name="logs_setup",
     description="Auto-create a Logs category with a channel for every log type (leadership)",
@@ -246,44 +286,10 @@ async def settings_logs_setup(interaction: discord.Interaction) -> None:
     await interaction.response.defer(ephemeral=True)
     store = guild_store(DATA, interaction.guild_id)
 
-    # find or create a private Logs category (staff-only)
-    cat = discord.utils.get(guild.categories, name="📋 Gang Manager Logs")
-    if cat is None:
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            me: discord.PermissionOverwrite(view_channel=True, send_messages=True),
-        }
-        lead = _leadership_role(guild, store)
-        if lead is not None:
-            overwrites[lead] = discord.PermissionOverwrite(view_channel=True)
-        try:
-            cat = await guild.create_category(
-                "📋 Gang Manager Logs", overwrites=overwrites, reason="Log channels setup"
-            )
-        except discord.HTTPException:
-            cat = None
-
-    created: list[str] = []
-    kept: list[str] = []
-    for k in _LOG_KEYS:
-        skey = CONFIG_SETTINGS[k][1]
-        cur = store.get(skey)
-        if cur and guild.get_channel(cur) is not None:
-            kept.append(k)
-            continue
-        try:
-            ch = await guild.create_text_channel(
-                _log_channel_name(k), category=cat, reason="Log channel setup"
-            )
-            store[skey] = ch.id
-            created.append(ch.mention)
-        except discord.HTTPException:
-            pass
+    created, kept = await ensure_log_channels(guild, store)
     save_data(DATA)
 
-    desc = f"Created **{len(created)}** log channel(s)" + (
-        " under **📋 Gang Manager Logs**:" if cat is not None else ":"
-    )
+    desc = f"Created **{len(created)}** log channel(s) under **📋 Gang Manager Logs**:"
     desc += "\n" + ("\n".join(created) if created else "—")
     if kept:
         desc += f"\n\nLeft **{len(kept)}** already-set channel(s) alone. Run this again any time to re-create missing ones."
