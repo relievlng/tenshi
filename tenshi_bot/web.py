@@ -2887,6 +2887,8 @@ _PAGE_HTML = """
     border:1px solid var(--line);color:var(--text);padding:11px 14px;border-radius:12px;outline:none;transition:.16s}
   .cand input,.addbar input{padding:9px 12px}
   input:focus,select:focus{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.06)}
+  select option{background:#15151a;color:#ececf1}
+  select option:checked{background:#2a2a33}
   .muted{color:var(--mute)}
 
   /* ===== gate / login / no-access screens ===== */
