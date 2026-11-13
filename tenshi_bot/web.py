@@ -2619,29 +2619,47 @@ h1 .g{background-size:200% 100%;animation:sheen 6s ease-in-out infinite}
 .livedot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-right:6px;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:ping 1.8s infinite}
 @keyframes ping{0%{box-shadow:0 0 0 0 rgba(34,197,94,.6)}80%,100%{box-shadow:0 0 0 9px rgba(34,197,94,0)}}
 @media(max-width:760px){.mbody{grid-template-columns:1fr}.mside{display:none}.mstats{grid-template-columns:repeat(2,1fr)}.mgrid{grid-template-columns:1fr}.mock,.mock.up{transform:none}}
-/* ---- Discord showcase ---- */
-.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start}
+/* ---- Discord showcase (mirrors the bot's real Components-V2 cards) ---- */
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;align-items:start}
 .dmsg{display:flex;gap:12px;padding:16px;border-radius:16px;background:#2b2d31;border:1px solid rgba(255,255,255,.06);
- box-shadow:0 24px 60px rgba(0,0,0,.45);font-family:"gg sans","Noto Sans",Inter,-apple-system,sans-serif;transition:transform .25s}
-.dmsg:hover{transform:translateY(-4px)}
+ box-shadow:0 24px 60px rgba(0,0,0,.45);font-family:"gg sans","Noto Sans",Inter,-apple-system,sans-serif;transition:transform .25s,box-shadow .25s}
+.dmsg:hover{transform:translateY(-5px);box-shadow:0 34px 80px rgba(0,0,0,.55)}
 .dav{width:40px;height:40px;border-radius:50%;background:#111214;display:grid;place-items:center;flex:none;overflow:hidden}
 .dav img{width:34px;height:22px;object-fit:contain}
 .dcol{flex:1;min-width:0}
 .dname{font-weight:700;font-size:15px;color:#f2f3f5;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .dbot{font-size:10px;font-weight:700;background:#5865f2;color:#fff;padding:1px 5px;border-radius:4px;letter-spacing:.2px}
 .dname time{font-weight:500;font-size:12px;color:#949ba4}
-.demb{margin-top:8px;border-left:4px solid var(--c);background:#232428;border-radius:4px;padding:12px 14px;color:#dbdee1;font-size:14px;line-height:1.45}
-.demb b{display:block;color:#f2f3f5;margin-bottom:8px}
-.dscore{font-size:34px;font-weight:900;color:#fff;letter-spacing:1px}.dscore span{color:#80848e;font-size:24px}
-.dbar{height:7px;border-radius:5px;background:rgba(237,66,69,.5);overflow:hidden;margin:10px 0 6px}.dbar i{display:block;height:100%;background:#23a55a}
+/* V2 container: dark card with a colour accent bar down the left edge */
+.vcard{position:relative;margin-top:8px;background:#232428;border:1px solid rgba(255,255,255,.05);border-radius:8px;
+ padding:14px 16px 12px 18px;color:#dbdee1;font-size:14px;line-height:1.5;overflow:hidden}
+.vcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c,#c9c9d2)}
+.vhead{display:flex;gap:12px;align-items:flex-start}
+.vtitle{flex:1;min-width:0}
+.vtitle b{display:block;color:#f2f3f5;font-size:16px;font-weight:800;letter-spacing:.2px}
+.vtitle small{display:block;color:#b5bac1;font-size:13px;margin-top:3px;line-height:1.45}
+.vthumb{width:46px;height:46px;border-radius:12px;flex:none;object-fit:cover;background:#111214;border:1px solid rgba(255,255,255,.08)}
+.vquote{margin:11px 0 2px;border-left:3px solid rgba(255,255,255,.14);padding:2px 0 2px 12px;display:grid;gap:5px}
+.vquote div{font-size:13.5px;color:#dbdee1}
+.vquote b{color:#f2f3f5;font-weight:700}
+.vquote .sep{color:#80848e;margin:0 5px}
+.vfull{margin:10px 0 2px}
+.vfull i{display:block;font-style:normal;font-weight:800;color:#f2f3f5;font-size:12.5px;text-transform:none;margin-bottom:3px}
+.vdiv{height:1px;background:rgba(255,255,255,.08);margin:12px 0}
+.vfoot{color:#8a8f98;font-size:12px;margin-top:11px}
+.vfoot b{color:#aeb3bd;font-weight:700}
+.dscore{font-size:36px;font-weight:900;color:#fff;letter-spacing:1px;margin:4px 0}.dscore span{color:#80848e;font-size:24px}.dscore .dim{color:#80848e}
+.dbar{height:8px;border-radius:5px;background:rgba(237,66,69,.5);overflow:hidden;margin:8px 0 6px}.dbar i{display:block;height:100%;background:#23a55a}
 .dsmall{font-size:12.5px;color:#b5bac1}
-.drounds{margin-top:8px;letter-spacing:2px}
-.dfields{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
-.dfields div{font-size:13px;color:#dbdee1}.dfields i{display:block;font-style:normal;font-weight:700;color:#f2f3f5;font-size:12.5px;margin-bottom:2px}
-.dbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.dbtn{font-size:13px;font-weight:600;padding:6px 12px;border-radius:4px;background:#4e5058;color:#fff}
+.drounds{margin-top:8px;letter-spacing:2px;font-size:15px}
+.dlist{display:grid;gap:7px;margin:4px 0 2px}
+.dlist div{display:flex;align-items:center;gap:9px;font-size:13.5px;color:#dbdee1}
+.dlist .rk{margin-left:auto;color:#aeb3bd;font-size:12.5px;font-weight:600}
+.dlist .pip{width:9px;height:9px;border-radius:50%;background:var(--c,#c9c9d2);flex:none}
+.dbtns{display:flex;flex-wrap:wrap;gap:8px}
+.dbtn{font-size:13px;font-weight:600;padding:7px 13px;border-radius:5px;background:#4e5058;color:#fff;line-height:1}
 .dbtn.g{background:#248046}.dbtn.r{background:#da373c}.dbtn.b{background:#5865f2}
-.dvote{height:7px;border-radius:5px;background:rgba(237,66,69,.5);overflow:hidden;margin:10px 0 4px}.dvote i{display:block;height:100%;width:87%;background:#23a55a}
+.dvote{height:8px;border-radius:5px;background:rgba(237,66,69,.5);overflow:hidden;margin:9px 0 4px}.dvote i{display:block;height:100%;width:87%;background:#23a55a}
 /* ---- pricing: rotating light border ---- */
 @property --ang{syntax:"<angle>";initial-value:0deg;inherits:false}
 .price::before{background:conic-gradient(from var(--ang),transparent 0deg,rgba(255,255,255,.8) 50deg,transparent 120deg,transparent 360deg);
@@ -2721,56 +2739,146 @@ h1 .g{background-size:200% 100%;animation:sheen 6s ease-in-out infinite}
 <section id=discord>
   <div class="kicker rev">Right inside Discord</div>
   <h2 class=rev>Looks this good in your server.</h2>
-  <p class="sub rev">Live cards your members actually use — scoreboards, orders and applications that update themselves.</p>
+  <p class="sub rev">The real cards your members use — command center, roster, war scoreboards, orders, KOS draws and applications, each one updating itself.</p>
   <div class=dgrid>
+
     <div class="dmsg rev">
       <div class=dav><img src="/gm-logo.png" alt=""></div>
       <div class=dcol>
         <div class=dname>Gang Manager <span class=dbot>APP</span><time>Today at 9:41 PM</time></div>
-        <div class=demb style="--c:#23a55a">
-          <b>⚔️ War · Black Lotus vs Night Riders</b>
-          <div class=dscore>5 <span>—</span> 3</div>
-          <div class=dbar><i style="width:62%"></i></div>
-          <div class=dsmall>Win rate 62% · first to 7</div>
-          <div class=drounds>🟩🟩🟥🟩🟥🟩🟩🟥</div>
+        <div class=vcard style="--c:#c9c9d2">
+          <div class=vhead>
+            <div class=vtitle><b>👑 Black Lotus — Command Center</b><small>Your whole gang at a glance.</small></div>
+            <img class=vthumb src="/gm-icon.png" alt="">
+          </div>
+          <div class=vquote>
+            <div><b>Members</b><span class=sep>·</span>48</div>
+            <div><b>On KOS</b><span class=sep>·</span>7</div>
+            <div><b>Open orders</b><span class=sep>·</span>12</div>
+            <div><b>Active wars</b><span class=sep>·</span>1</div>
+          </div>
+          <div class=vdiv></div>
+          <div class=dbtns><span class=dbtn>📊 Refresh</span><span class=dbtn>👤 My profile</span></div>
+          <div class=vdiv></div>
+          <div class=vfoot>✦ <b>Gang Manager</b> · made by pmxl · just now</div>
         </div>
-        <div class=dbtns><span class="dbtn g">🏆 Round won</span><span class="dbtn r">💀 Round lost</span><span class=dbtn>↩️ Undo</span></div>
       </div>
     </div>
+
     <div class="dmsg rev">
       <div class=dav><img src="/gm-logo.png" alt=""></div>
       <div class=dcol>
         <div class=dname>Gang Manager <span class=dbot>APP</span><time>Today at 9:44 PM</time></div>
-        <div class=demb style="--c:#f0b232">
-          <b>🎫 Order #42 · P90 Order</b>
-          <div class=dfields>
-            <div><i>Customer</i>@Vex</div>
-            <div><i>Items</i>P90 × 4</div>
-            <div><i>Priority</i>🚩 High</div>
-            <div><i>Payment</i>❌ Unpaid</div>
+        <div class=vcard style="--c:#23a55a">
+          <div class=vhead>
+            <div class=vtitle><b>⚔️ War · Black Lotus vs Night Riders</b><small>First to 7 · live scoreboard</small></div>
+            <img class=vthumb src="/gm-icon.png" alt="">
           </div>
+          <div class=dscore>5 <span>—</span> <span class=dim>3</span></div>
+          <div class=dbar><i style="width:62%"></i></div>
+          <div class=dsmall>Win rate 62% · 8 rounds played</div>
+          <div class=drounds>🟩🟩🟥🟩🟥🟩🟩🟥</div>
+          <div class=vdiv></div>
+          <div class=dbtns><span class="dbtn g">🏆 Round won</span><span class="dbtn r">💀 Round lost</span><span class=dbtn>↩️ Undo</span><span class=dbtn>🏁 End war</span></div>
+          <div class=vdiv></div>
+          <div class=vfoot>✦ <b>Gang Manager</b> · made by pmxl · 1 minute ago</div>
         </div>
-        <div class=dbtns><span class="dbtn g">💰 Mark paid</span><span class=dbtn>🚩 Priority</span><span class="dbtn r">🔒 Close</span></div>
       </div>
     </div>
+
+    <div class="dmsg rev">
+      <div class=dav><img src="/gm-logo.png" alt=""></div>
+      <div class=dcol>
+        <div class=dname>Gang Manager <span class=dbot>APP</span><time>Today at 9:46 PM</time></div>
+        <div class=vcard style="--c:#f0b232">
+          <div class=vhead>
+            <div class=vtitle><b>🎫 P90 Order · Order #42</b><small>Thanks for your order, @Vex — staff are on it.</small></div>
+            <img class=vthumb src="/gm-icon.png" alt="">
+          </div>
+          <div class=vquote>
+            <div><b>Customer</b><span class=sep>·</span>@Vex</div>
+            <div><b>Status</b><span class=sep>·</span>🔴 Unpaid</div>
+            <div><b>Priority</b><span class=sep>·</span>🟠 High</div>
+            <div><b>Handled by</b><span class=sep>·</span>@Shadow</div>
+          </div>
+          <div class=vfull><i>📦 Items</i>P90 × 4</div>
+          <div class=vdiv></div>
+          <div class=dbtns><span class=dbtn>🙋 Claim</span><span class="dbtn g">💰 Mark paid</span><span class=dbtn>🚩 Priority</span><span class="dbtn r">🔒 Close</span></div>
+          <div class=vdiv></div>
+          <div class=vfoot>✦ <b>Gang Manager</b> · made by pmxl · 2 minutes ago</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dmsg rev">
+      <div class=dav><img src="/gm-logo.png" alt=""></div>
+      <div class=dcol>
+        <div class=dname>Gang Manager <span class=dbot>APP</span><time>Today at 9:48 PM</time></div>
+        <div class=vcard style="--c:#c9c9d2">
+          <div class=vhead>
+            <div class=vtitle><b>👥 Roster · Black Lotus</b><small>Built live from your rank roles · 48 members</small></div>
+            <img class=vthumb src="/gm-icon.png" alt="">
+          </div>
+          <div class=dlist>
+            <div><span class=pip></span><b>Shadow</b><span class=rk>Boss</span></div>
+            <div><span class=pip></span><b>Vex</b><span class=rk>Underboss</span></div>
+            <div><span class=pip></span><b>Riot</b><span class=rk>Enforcer</span></div>
+            <div><span class=pip></span><b>Nova</b><span class=rk>Enforcer · +44 more</span></div>
+          </div>
+          <div class=vdiv></div>
+          <div class=dbtns><span class=dbtn>🔄 Refresh roster</span></div>
+          <div class=vdiv></div>
+          <div class=vfoot>✦ <b>Gang Manager</b> · made by pmxl · just now</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dmsg rev">
+      <div class=dav><img src="/gm-logo.png" alt=""></div>
+      <div class=dcol>
+        <div class=dname>Gang Manager <span class=dbot>APP</span><time>Today at 9:50 PM</time></div>
+        <div class=vcard style="--c:#da373c">
+          <div class=vhead>
+            <div class=vtitle><b>💀 KOS · Tonight's draw</b><small>Signed up → randomly drawn → staff approved.</small></div>
+            <img class=vthumb src="/gm-icon.png" alt="">
+          </div>
+          <div class=vquote>
+            <div><b>Signed up</b><span class=sep>·</span>9 members</div>
+            <div><b>Drawn</b><span class=sep>·</span>@Vex · @Riot · @Nova</div>
+            <div><b>Status</b><span class=sep>·</span>🟢 Approved by @Shadow</div>
+          </div>
+          <div class=vdiv></div>
+          <div class=dbtns><span class="dbtn r">🎯 Sign up</span><span class=dbtn>🎲 Re-draw</span><span class="dbtn g">📣 Announce</span></div>
+          <div class=vdiv></div>
+          <div class=vfoot>✦ <b>Gang Manager</b> · made by pmxl · 3 minutes ago</div>
+        </div>
+      </div>
+    </div>
+
     <div class="dmsg rev">
       <div class=dav><img src="/gm-logo.png" alt=""></div>
       <div class=dcol>
         <div class=dname>Gang Manager <span class=dbot>APP</span><time>Today at 9:52 PM</time></div>
-        <div class=demb style="--c:#5865f2">
-          <b>📨 New application · Riot</b>
-          <div class=dfields>
-            <div><i>Role</i>Enforcer</div>
-            <div><i>Active</i>Daily</div>
-            <div><i>Vouched by</i>@Shadow</div>
-            <div><i>Closes</i>in 24 hours</div>
+        <div class=vcard style="--c:#5865f2">
+          <div class=vhead>
+            <div class=vtitle><b>📨 New application · Riot</b><small>Community vote · closes in 24 hours</small></div>
+            <img class=vthumb src="/gm-icon.png" alt="">
+          </div>
+          <div class=vquote>
+            <div><b>Role</b><span class=sep>·</span>Enforcer</div>
+            <div><b>Active</b><span class=sep>·</span>Daily</div>
+            <div><b>Vouched by</b><span class=sep>·</span>@Shadow</div>
           </div>
           <div class=dvote><i></i></div>
           <div class=dsmall>✅ 7 · ❌ 1</div>
+          <div class=vdiv></div>
+          <div class=dbtns><span class="dbtn g">✅ Yes · 7</span><span class="dbtn r">❌ No · 1</span></div>
+          <div class=vdiv></div>
+          <div class=vfoot>✦ <b>Gang Manager</b> · made by pmxl · 1 minute ago</div>
         </div>
-        <div class=dbtns><span class="dbtn g">✅ Yes · 7</span><span class="dbtn r">❌ No · 1</span></div>
       </div>
     </div>
+
   </div>
 </section>
 
