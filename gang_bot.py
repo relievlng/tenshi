@@ -18,6 +18,7 @@ from tenshi_bot.settings import *  # noqa: F401,F403
 from tenshi_bot.panels import *  # noqa: F401,F403
 from tenshi_bot.tickets import *  # noqa: F401,F403
 from tenshi_bot.gang import *  # noqa: F401,F403
+from tenshi_bot.billing import *  # noqa: F401,F403
 from tenshi_bot.web import *  # noqa: F401,F403
 
 
@@ -34,6 +35,11 @@ bot.tree.add_command(strike_group)
 bot.tree.add_command(war_group)
 bot.tree.add_command(gang_group)
 bot.tree.add_command(settings_group)
+bot.tree.add_command(subscription_group)
+
+# Paywall: block paid commands in a server whose subscription has lapsed.
+# No-op unless BILLING_ENABLED is set (see billing.py).
+bot.tree.interaction_check = subscription_gate
 
 
 @bot.listen("on_interaction")
@@ -109,6 +115,15 @@ async def on_guild_join(guild: discord.Guild) -> None:
             await guild.leave()
         except discord.HTTPException:
             pass
+        return
+
+    # New server: start the one-time free trial automatically (if enabled).
+    try:
+        state = start_trial(guild.id)
+        if state is not None:
+            log.info("Started free trial for %s (%s): %s days", guild.name, guild.id, state["days_left"])
+    except Exception as exc:  # never let billing break a join
+        log.error("trial start failed for %s: %s", guild.id, exc)
 
 
 @bot.event

@@ -106,6 +106,14 @@ All channel/role settings live in `/settings`. Staff commands need the leadershi
 | `PORT` | no | — | Set automatically by Railway for a web service; turns on the web roster manager |
 | `DISCORD_CLIENT_SECRET` | no | — | OAuth2 secret (Developer Portal → OAuth2) — required for the web manager login |
 | `WEB_SECRET` | no | derived | Optional extra secret used to sign web sessions |
+| `PUBLIC_URL` | no | request host | Your public site URL (e.g. `https://gang.example.com`) — used in subscribe links |
+| `BILLING_ENABLED` | no | off | `true` turns on the paywall: a server must be subscribed or the bot's paid commands are locked |
+| `BOT_OWNER_IDS` | no | — | Comma-separated Discord user IDs that bypass the paywall and can run `/subscription grant` |
+| `TRIAL_DAYS` | no | `7` | Free-trial length granted automatically when the bot joins a new server (0 = off) |
+| `INVITE_PERMISSIONS` | no | sensible set | Override the permission integer on the "Add to Discord" invite link |
+| `STRIPE_SECRET_KEY` | no | — | Stripe secret key — turns on the Subscribe button (real monthly billing) |
+| `STRIPE_PRICE_ID` | no | — | The Stripe recurring Price to sell (e.g. `price_123`) |
+| `STRIPE_WEBHOOK_SECRET` | no | — | Stripe webhook signing secret (`whsec_…`) so payments auto-activate/expire servers |
 
 ## Web roster manager (optional)
 
@@ -164,6 +172,38 @@ not tags.
    `/settings role → 🌐 Website access role`. Give it to whoever should manage
    the roster.
 5. Open `https://<your-railway-domain>/`, log in with Discord, and you're in.
+
+## Selling it: subscriptions, invite & the settings editor
+
+Gang Manager can be run as a paid product that other servers add themselves.
+
+- **Add to Discord** — the website's `/pricing` page has an "Add to Discord"
+  button (built from the bot's own client ID) so any server owner can invite it.
+- **Settings editor** — a **⚙️ Settings** tab in the web panel lets staff set
+  every channel and role from dropdowns (no slash commands), with a setup
+  progress bar, an **Add to another server** button, and a **Website panel
+  on/off** switch. All changes apply to Discord live and are logged.
+- **Subscriptions** — set `BILLING_ENABLED=true` to require a subscription per
+  server. An unsubscribed/expired server keeps `/subscription`, `/settings` and
+  `/gang_help` (so staff can set up and pay) but every other paid command is
+  locked until it's active. New servers get an automatic `TRIAL_DAYS` free trial.
+  - **Take real payments (Stripe):** create a recurring Price in Stripe, set
+    `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` and `STRIPE_WEBHOOK_SECRET`, and point
+    a Stripe webhook at `https://<your-domain>/billing/webhook`
+    (events: `checkout.session.completed`, `invoice.paid`,
+    `invoice.payment_failed`, `customer.subscription.deleted`). The Subscribe
+    button then activates/expires servers automatically.
+  - **No Stripe yet:** you (an owner in `BOT_OWNER_IDS`) activate a server
+    manually after any payment with `/subscription grant days:30` (or
+    `lifetime:true`), check it with `/subscription status`, and cancel with
+    `/subscription cancel`.
+
+| Command | What it does | Who |
+|---|---|---|
+| `/subscription status` | This server's plan, days left, and a renew link | Everyone |
+| `/subscription trial` | Start the one-time free trial | Leadership |
+| `/subscription grant [days] [plan] [lifetime] [server_id]` | Activate/extend a server | Owner |
+| `/subscription cancel [server_id]` | Expire a server now | Owner |
 
 ## Run locally
 

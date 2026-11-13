@@ -18,6 +18,7 @@ into the same roster data and role actions the /roster commands already use.
 import base64
 import hashlib
 import hmac
+import html
 import json
 import os
 import re
@@ -25,6 +26,16 @@ import secrets
 import time
 
 from .core import *  # noqa: F401,F403
+from .billing import (
+    subscription_state,
+    is_active,
+    grant,
+    expire,
+    is_owner,
+    PLANS,
+    DEFAULT_PLAN,
+)
+from .settings import CONFIG_SETTINGS, _SETTING_EMOJI, _LOG_KEYS
 
 try:  # aiohttp ships with discord.py; guard so the package still imports without it
     from aiohttp import web as _aioweb
@@ -1126,22 +1137,48 @@ def _brand_info() -> dict:
     return {"name": g.name if g is not None else "Gang Manager", "icon": icon}
 
 
+def _public_cfg() -> dict:
+    """Public, unauthenticated bits the page needs (invite link, pricing)."""
+    return {
+        "invite_url": _invite_url(),
+        "stripe": _stripe_ready(),
+        "plan": _plan_public(),
+    }
+
+
+def _sub_public(gid: int) -> dict:
+    s = subscription_state(gid)
+    return {
+        "active": s["active"],
+        "status": s["status"],
+        "days_left": s["days_left"],
+        "trial": s["trial"],
+        "lifetime": s["lifetime"],
+        "billing_enabled": s["billing_enabled"],
+    }
+
+
 async def _h_me(request):
     brand = _brand_info()
+    cfg = _public_cfg()
     if not _configured():
-        return _aioweb.json_response({"authed": False, "reason": "not_configured", "brand": brand})
+        return _aioweb.json_response({"authed": False, "reason": "not_configured", "brand": brand, "public": cfg})
     uid = _read_session(request.cookies.get(_COOKIE))
     if not uid:
-        return _aioweb.json_response({"authed": False, "reason": "login", "brand": brand})
+        return _aioweb.json_response({"authed": False, "reason": "login", "brand": brand, "public": cfg})
     guilds = await _accessible_guilds(uid)
     if not guilds:
-        return _aioweb.json_response({"authed": False, "reason": "no_access", "brand": brand})
+        return _aioweb.json_response({"authed": False, "reason": "no_access", "brand": brand, "public": cfg})
     return _aioweb.json_response(
         {
             "authed": True,
             "brand": brand,
-            "user": {"id": str(uid)},
-            "guilds": [{"id": str(g.id), "name": g.name} for g in guilds],
+            "public": cfg,
+            "user": {"id": str(uid), "owner": is_owner(uid)},
+            "guilds": [
+                {"id": str(g.id), "name": g.name, "subscription": _sub_public(g.id)}
+                for g in guilds
+            ],
         }
     )
 
@@ -1230,8 +1267,12 @@ def _web_actor(request, guild):
         return None
 
 
-async def _gate(request, guild) -> tuple[bool, int, str]:
-    """Allow only a logged-in user who holds this guild's website-access role."""
+async def _gate(request, guild, allow_disabled: bool = False) -> tuple[bool, int, str]:
+    """Allow only a logged-in user who holds this guild's website-access role.
+
+    Also blocks when the panel is switched off (``web_enabled``) or the server's
+    subscription has lapsed — except handlers that pass ``allow_disabled=True``
+    (Settings, the on/off toggle), so staff can always get back in to fix it."""
     if not _configured():
         return (False, 503, "Login isn't configured on this server.")
     uid = _read_session(request.cookies.get(_COOKIE))
@@ -1239,6 +1280,12 @@ async def _gate(request, guild) -> tuple[bool, int, str]:
         return (False, 401, "Not logged in.")
     if not await _has_web_access(guild, uid):
         return (False, 403, "You don't have the website-access role.")
+    if not allow_disabled:
+        store = guild_store(DATA, guild.id)
+        if not store.get("web_enabled", True):
+            return (False, 503, "The website panel is turned off for this server.")
+        if not is_active(guild.id):
+            return (False, 402, "This server's subscription has expired.")
     return (True, 200, "")
 
 
@@ -1870,6 +1917,399 @@ async def _h_eoi_accept(request):
     return await _web_end_eoi(request, "accept")
 
 
+# --------------------------------------------------------------------------- #
+# Subscriptions, the "Add to Discord" invite, and the settings editor
+# --------------------------------------------------------------------------- #
+
+# Permissions the bot asks for on invite (Manage Roles/Channels, Send/Embed/
+# Attach, Read History, Manage/Add-react Messages, View, Mention). Override with
+# the INVITE_PERMISSIONS env var.
+_DEFAULT_INVITE_PERMS = 268692560
+
+
+def _invite_perms() -> str:
+    raw = os.getenv("INVITE_PERMISSIONS", "").strip()
+    return raw if raw.isdigit() else str(_DEFAULT_INVITE_PERMS)
+
+
+def _invite_url() -> str:
+    cid = _client_id()
+    if not cid:
+        return ""
+    from urllib.parse import urlencode
+
+    q = urlencode(
+        {
+            "client_id": cid,
+            "scope": "bot applications.commands",
+            "permissions": _invite_perms(),
+        }
+    )
+    return f"{_OAUTH_AUTHORIZE}?{q}"
+
+
+def _public_base(request) -> str:
+    base = (os.getenv("PUBLIC_URL") or os.getenv("WEB_URL") or "").rstrip("/")
+    if base:
+        return base
+    host = request.headers.get("X-Forwarded-Host") or request.host
+    return f"https://{host}"
+
+
+def _stripe_ready() -> bool:
+    return bool(os.getenv("STRIPE_SECRET_KEY") and os.getenv("STRIPE_PRICE_ID"))
+
+
+def _plan_public() -> dict:
+    p = PLANS[DEFAULT_PLAN]
+    return {"id": DEFAULT_PLAN, "label": p["label"], "price": p["price"], "days": p["days"]}
+
+
+async def _stripe_post(path: str, form: list[tuple[str, str]]) -> dict | None:
+    """Minimal Stripe REST POST (form-encoded). Returns parsed JSON or None."""
+    key = os.getenv("STRIPE_SECRET_KEY")
+    if not key or _aiohttp is None:
+        return None
+    try:
+        async with _aiohttp.ClientSession() as s:
+            async with s.post(
+                f"https://api.stripe.com/v1/{path}",
+                data=form,
+                headers={"Authorization": f"Bearer {key}"},
+            ) as r:
+                body = await r.json()
+                if r.status >= 400:
+                    log.error("Stripe %s failed (%s): %s", path, r.status, body.get("error", {}).get("message"))
+                    return None
+                return body
+    except Exception as exc:  # pragma: no cover - network
+        log.error("Stripe %s error: %s", path, exc)
+        return None
+
+
+# ---- pricing / invite landing ---------------------------------------------- #
+
+def _pricing_page(request) -> str:
+    invite = _invite_url()
+    plan = _plan_public()
+    stripe_on = _stripe_ready()
+    sub_note = (
+        "Pick your server and start a subscription below."
+        if stripe_on
+        else "Add the bot and start your free trial — subscriptions open soon."
+    )
+    buy_block = (
+        "<a class='btn primary' href='/billing/checkout'>Subscribe — " + plan["price"] + "</a>"
+        if stripe_on
+        else "<span class='btn disabled' title='The owner is finishing payment setup'>Subscriptions opening soon</span>"
+    )
+    invite_block = (
+        f"<a class='btn' href='{invite}' target='_blank' rel='noopener'>➕ Add to Discord</a>"
+        if invite
+        else "<span class='btn disabled'>Invite link unavailable</span>"
+    )
+    return (
+        "<!doctype html><html lang=en><head><meta charset=utf-8>"
+        "<meta name=viewport content='width=device-width,initial-scale=1'>"
+        "<title>Gang Manager · Pricing</title><style>"
+        "*{box-sizing:border-box}"
+        "body{margin:0;min-height:100vh;color:#ececf1;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+        "background:linear-gradient(150deg,#050507 0%,#0e0e12 46%,#4a4a52 80%,#ededf2 100%) fixed;"
+        "display:flex;align-items:center;justify-content:center;padding:40px 18px}"
+        ".card{max-width:440px;width:100%;background:rgba(10,10,14,.72);border:1px solid rgba(255,255,255,.12);"
+        "border-radius:22px;padding:34px 30px;backdrop-filter:blur(8px);box-shadow:0 30px 80px rgba(0,0,0,.5)}"
+        ".logo{display:block;margin:0 auto 14px;width:92px;height:56px;object-fit:contain}"
+        "h1{font-size:26px;margin:0 0 4px;text-align:center}"
+        ".sub{color:#b8b8c2;text-align:center;margin:0 0 22px;font-size:14px}"
+        ".price{text-align:center;margin:18px 0}"
+        ".price b{font-size:40px}.price span{color:#9a9aa6}"
+        "ul{list-style:none;padding:0;margin:18px 0;font-size:14px}"
+        "li{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}li:before{content:'✓ ';color:#8ad18a}"
+        ".btn{display:block;text-align:center;padding:13px 16px;margin:10px 0;border-radius:12px;font-weight:650;"
+        "text-decoration:none;color:#0a0a0c;background:#ededf2;transition:transform .08s}"
+        ".btn:hover{transform:translateY(-1px)}"
+        ".btn.primary{background:linear-gradient(90deg,#c9c9d2,#ffffff);color:#0a0a0c}"
+        ".btn:not(.primary):not(.disabled){background:rgba(255,255,255,.1);color:#ececf1;border:1px solid rgba(255,255,255,.18)}"
+        ".btn.disabled{background:rgba(255,255,255,.06);color:#777;cursor:not-allowed}"
+        ".foot{text-align:center;margin-top:18px;font-size:12px;color:#8a8a94}"
+        ".foot a{color:#c9c9d2}"
+        "</style></head><body><div class=card>"
+        "<img class=logo src='/gm-logo.png' alt='GM'>"
+        "<h1>Gang Manager</h1>"
+        f"<p class=sub>{sub_note}</p>"
+        f"<div class=price><b>{plan['price'].split(' /')[0]}</b> <span>/ {plan['label'].lower()}</span></div>"
+        "<ul><li>Full roster, KOS, strikes &amp; wars</li>"
+        "<li>Ticket &amp; order system</li>"
+        "<li>EOI recruitment with voting</li>"
+        "<li>Web control panel &amp; live logs</li></ul>"
+        f"{buy_block}{invite_block}"
+        "<div class=foot><a href='/'>Open the panel</a> · <a href='/terms'>Terms</a> · <a href='/privacy'>Privacy</a>"
+        " · made by pmxl</div>"
+        "</div></body></html>"
+    )
+
+
+async def _h_pricing(request):
+    return _aioweb.Response(text=_pricing_page(request), content_type="text/html")
+
+
+def _pick_billing_guild(request):
+    """Resolve the guild a billing action is for: ?guild=, else sole guild."""
+    return _guild_from(request.query.get("guild"))
+
+
+async def _h_billing_checkout(request):
+    """Start a Stripe Checkout subscription for a guild the user can manage."""
+    if not _stripe_ready():
+        return _aioweb.HTTPFound("/pricing")
+    uid = _read_session(request.cookies.get(_COOKIE))
+    if not uid:
+        return _aioweb.HTTPFound("/login")
+    guild = _pick_billing_guild(request)
+    if guild is None:
+        # Let them choose a server they manage.
+        guilds = await _accessible_guilds(uid)
+        if len(guilds) == 1:
+            guild = guilds[0]
+        elif not guilds:
+            return _aioweb.Response(text=_DENIED_HTML, status=403, content_type="text/html")
+        else:
+            opts = "".join(
+                f"<li><a href='/billing/checkout?guild={g.id}'>{html.escape(g.name)}</a></li>" for g in guilds
+            )
+            return _aioweb.Response(
+                text=f"<!doctype html><meta charset=utf-8><body style='font-family:sans-serif;background:#0b0b0d;color:#eee;padding:40px'>"
+                f"<h3>Which server?</h3><ul>{opts}</ul></body>",
+                content_type="text/html",
+            )
+    if not await _has_web_access(guild, uid):
+        return _aioweb.Response(text=_DENIED_HTML, status=403, content_type="text/html")
+
+    base = _public_base(request)
+    form = [
+        ("mode", "subscription"),
+        ("line_items[0][price]", os.getenv("STRIPE_PRICE_ID", "")),
+        ("line_items[0][quantity]", "1"),
+        ("success_url", f"{base}/billing/success?session_id={{CHECKOUT_SESSION_ID}}"),
+        ("cancel_url", f"{base}/pricing"),
+        ("client_reference_id", str(guild.id)),
+        ("metadata[guild_id]", str(guild.id)),
+        ("subscription_data[metadata][guild_id]", str(guild.id)),
+        ("allow_promotion_codes", "true"),
+    ]
+    session = await _stripe_post("checkout/sessions", form)
+    if not session or not session.get("url"):
+        return _aioweb.Response(text="Couldn't start checkout. Try again later.", status=502)
+    return _aioweb.HTTPFound(session["url"])
+
+
+async def _h_billing_success(request):
+    return _aioweb.Response(
+        text="<!doctype html><meta charset=utf-8><title>Thanks</title>"
+        "<meta http-equiv=refresh content='4;url=/'>"
+        "<body style='font-family:sans-serif;background:#07070a;color:#ececf1;text-align:center;padding:14vh 18px'>"
+        "<h1>✅ You're subscribed</h1><p style='color:#b8b8c2'>Activation lands in a few seconds. "
+        "Taking you to the panel…</p><p><a style='color:#c9c9d2' href='/'>Open now</a></p></body>",
+        content_type="text/html",
+    )
+
+
+def _stripe_sig_ok(payload: bytes, header: str, secret: str) -> bool:
+    try:
+        parts = dict(p.split("=", 1) for p in header.split(",") if "=" in p)
+        t, v1 = parts.get("t"), parts.get("v1")
+        if not t or not v1:
+            return False
+        mac = hmac.new(secret.encode(), f"{t}.".encode() + payload, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(mac, v1)
+    except Exception:
+        return False
+
+
+def _event_guild_id(obj: dict) -> int | None:
+    for path in (
+        ("metadata", "guild_id"),
+        ("subscription_details", "metadata", "guild_id"),
+    ):
+        cur = obj
+        for k in path:
+            cur = cur.get(k) if isinstance(cur, dict) else None
+        if cur:
+            try:
+                return int(cur)
+            except (TypeError, ValueError):
+                pass
+    ref = obj.get("client_reference_id")
+    if ref:
+        try:
+            return int(ref)
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+async def _h_billing_webhook(request):
+    secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    payload = await request.read()
+    if secret:
+        if not _stripe_sig_ok(payload, request.headers.get("Stripe-Signature", ""), secret):
+            return _aioweb.Response(status=400, text="bad signature")
+    try:
+        event = json.loads(payload.decode())
+    except (ValueError, UnicodeDecodeError):
+        return _aioweb.Response(status=400, text="bad payload")
+
+    etype = event.get("type", "")
+    obj = (event.get("data") or {}).get("object") or {}
+    gid = _event_guild_id(obj)
+    days = PLANS[DEFAULT_PLAN]["days"] + 1  # a day of slack so renewals never gap
+
+    if etype in ("checkout.session.completed", "invoice.paid", "invoice.payment_succeeded"):
+        if gid is not None:
+            grant(
+                gid,
+                days=days,
+                plan=DEFAULT_PLAN,
+                status="active",
+                customer_id=obj.get("customer"),
+                sub_id=obj.get("subscription") or obj.get("id"),
+            )
+            g = bot.get_guild(gid)
+            if g is not None:
+                try:
+                    await send_log(g, guild_store(DATA, gid), "💳 Subscription payment received — active.", category="web")
+                except discord.HTTPException:
+                    pass
+    elif etype in ("customer.subscription.deleted", "invoice.payment_failed"):
+        if gid is not None:
+            expire(gid)
+            g = bot.get_guild(gid)
+            if g is not None:
+                try:
+                    await send_log(g, guild_store(DATA, gid), "🔒 Subscription ended (cancelled or payment failed).", category="web")
+                except discord.HTTPException:
+                    pass
+    return _aioweb.json_response({"received": True})
+
+
+# ---- website on/off toggle -------------------------------------------------- #
+
+async def _h_web_toggle(request):
+    """Turn this server's website panel on or off. Reachable even while off so
+    staff can switch it back on."""
+    guild = _guild_from(request.query.get("guild"))
+    if guild is None:
+        return _aioweb.json_response({"error": "Guild not found."}, status=404)
+    ok, code, msg = await _gate(request, guild, allow_disabled=True)
+    if not ok:
+        return _aioweb.json_response({"error": msg}, status=code)
+    store = guild_store(DATA, guild.id)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    enabled = bool(body.get("enabled", not store.get("web_enabled", True)))
+    store["web_enabled"] = enabled
+    save_data(DATA)
+    await send_log(
+        guild, store,
+        f"🌐 Website panel turned **{'on' if enabled else 'off'}**.",
+        category="web", actor=_web_actor(request, guild),
+    )
+    return _aioweb.json_response({"enabled": enabled})
+
+
+# ---- settings editor -------------------------------------------------------- #
+
+def _settings_list(guild: "discord.Guild", store: dict) -> dict:
+    """Every configurable channel/role, its current value, and the options."""
+    me = getattr(guild, "me", None)
+    bot_top = me.top_role.position if me is not None and me.top_role is not None else 10 ** 9
+    channels = [
+        {"id": str(c.id), "name": c.name}
+        for c in sorted(guild.text_channels, key=lambda c: c.position)
+    ]
+    roles = [
+        {"id": str(r.id), "name": r.name, "locked": r.position >= bot_top}
+        for r in sorted((r for r in guild.roles if r.name != "@everyone"),
+                        key=lambda r: r.position, reverse=True)
+    ]
+    items, done = [], 0
+    for key, (label, skey, kind) in CONFIG_SETTINGS.items():
+        val = store.get(skey)
+        obj = (guild.get_channel(val) if kind == "channel" else guild.get_role(val)) if val else None
+        if obj is not None:
+            done += 1
+        items.append({
+            "key": key,
+            "label": label,
+            "emoji": _SETTING_EMOJI.get(key, "•"),
+            "kind": kind,
+            "value": str(val) if val else "",
+            "value_name": getattr(obj, "name", "") if obj else "",
+            "is_log": key in _LOG_KEYS,
+        })
+    return {
+        "items": items,
+        "channels": channels,
+        "roles": roles,
+        "progress": {"done": done, "total": len(CONFIG_SETTINGS)},
+        "web_enabled": bool(store.get("web_enabled", True)),
+        "invite_url": _invite_url(),
+    }
+
+
+async def _h_settings(request):
+    guild = _guild_from(request.query.get("guild"))
+    if guild is None:
+        return _aioweb.json_response({"error": "Guild not found."}, status=404)
+    ok, code, msg = await _gate(request, guild, allow_disabled=True)
+    if not ok:
+        return _aioweb.json_response({"error": msg}, status=code)
+    store = guild_store(DATA, guild.id)
+    return _aioweb.json_response({"settings": _settings_list(guild, store)})
+
+
+async def _h_setting_set(request):
+    guild = _guild_from(request.query.get("guild"))
+    if guild is None:
+        return _aioweb.json_response({"error": "Guild not found."}, status=404)
+    ok, code, msg = await _gate(request, guild, allow_disabled=True)
+    if not ok:
+        return _aioweb.json_response({"error": msg}, status=code)
+    try:
+        body = await request.json()
+    except Exception:
+        return _aioweb.json_response({"error": "Bad request."}, status=400)
+    key = body.get("key")
+    value = body.get("value")
+    if key not in CONFIG_SETTINGS:
+        return _aioweb.json_response({"error": "Unknown setting."}, status=400)
+    label, skey, kind = CONFIG_SETTINGS[key]
+    store = guild_store(DATA, guild.id)
+
+    if value in (None, "", "none"):
+        store[skey] = None
+        new_obj = None
+    else:
+        try:
+            vid = int(value)
+        except (TypeError, ValueError):
+            return _aioweb.json_response({"error": "Bad value."}, status=400)
+        obj = guild.get_channel(vid) if kind == "channel" else guild.get_role(vid)
+        if obj is None:
+            return _aioweb.json_response({"error": f"That {kind} no longer exists."}, status=400)
+        store[skey] = vid
+        new_obj = obj
+    save_data(DATA)
+    await send_log(
+        guild, store,
+        f"⚙️ **{label}** set to {new_obj.mention if new_obj else '*cleared*'}.",
+        category="web", actor=_web_actor(request, guild),
+    )
+    return _aioweb.json_response({"ok": True, "settings": _settings_list(guild, store)})
+
+
 _web_started = False
 
 
@@ -1898,6 +2338,10 @@ async def start_web_server() -> None:
             _aioweb.get("/gm-logo.png", _h_logo),
             _aioweb.get("/terms", _h_terms),
             _aioweb.get("/privacy", _h_privacy),
+            _aioweb.get("/pricing", _h_pricing),
+            _aioweb.get("/billing/checkout", _h_billing_checkout),
+            _aioweb.get("/billing/success", _h_billing_success),
+            _aioweb.post("/billing/webhook", _h_billing_webhook),
             _aioweb.get("/login", _h_login),
             _aioweb.get("/callback", _h_callback),
             _aioweb.get("/logout", _h_logout),
@@ -1927,6 +2371,9 @@ async def start_web_server() -> None:
             _aioweb.get("/api/eois", _h_eois),
             _aioweb.post("/api/eoi_close", _h_eoi_close),
             _aioweb.post("/api/eoi_accept", _h_eoi_accept),
+            _aioweb.get("/api/settings", _h_settings),
+            _aioweb.post("/api/setting_set", _h_setting_set),
+            _aioweb.post("/api/web_toggle", _h_web_toggle),
         ]
     )
     runner = _aioweb.AppRunner(app)
@@ -2157,6 +2604,22 @@ _PAGE_HTML = """
   @media(max-width:560px){#toasts{left:14px;right:14px;max-width:none}}
   footer{color:var(--mute);font-size:12px;text-align:center;padding:30px 18px}
 
+  .banner{padding:12px 15px;border-radius:13px;margin-bottom:14px;font-size:14px;border:1px solid var(--line);background:rgba(20,20,26,.7)}
+  .banner a{color:#fff;font-weight:650}
+  .banner.bad{border-color:rgba(239,68,68,.5);background:rgba(42,16,16,.6)}
+  .banner.warn{border-color:rgba(234,179,8,.45);background:rgba(40,34,12,.6)}
+  .setuptop{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .pbar{height:9px;border-radius:6px;background:rgba(255,255,255,.08);margin-top:12px;overflow:hidden}
+  .pfill{height:100%;background:linear-gradient(90deg,#c9c9d2,#ffffff);border-radius:6px;transition:width .4s}
+  .setrow{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+  .setrow:last-child{border-bottom:none}
+  .setrow label{flex:1;font-size:14px;min-width:120px}
+  .setrow select{flex:1;max-width:260px}
+  .setrow.toggle{border-bottom:none}
+  .tgl{padding:7px 18px;border-radius:10px;font-weight:650;border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--mute);cursor:pointer}
+  .tgl.on{background:rgba(34,197,94,.22);border-color:rgba(34,197,94,.5);color:#bdf0c8}
+  .card h4{margin:0 0 8px;font-size:15px}
+
   .addbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
   .addbar .i{flex:1;min-width:150px}.addbar .q{width:92px}
   .iconbox{width:42px;height:42px;flex:none;border-radius:11px;display:grid;place-items:center;font-size:21px;
@@ -2320,6 +2783,8 @@ _PAGE_HTML = """
 
   <div id="stats" class="stats"></div>
 
+  <div id="subBanner"></div>
+
   <div class="tabs">
     <div class="tab active" data-tab="roster" onclick="setTab('roster')">👥 Roster</div>
     <div class="tab" data-tab="kos" onclick="setTab('kos')">💀 KOS</div>
@@ -2328,6 +2793,7 @@ _PAGE_HTML = """
     <div class="tab" data-tab="wars" onclick="setTab('wars')">⚔️ Wars</div>
     <div class="tab" data-tab="eois" onclick="setTab('eois')">📨 EOIs</div>
     <div class="tab" data-tab="orders" onclick="setTab('orders')">🎫 Orders</div>
+    <div class="tab" data-tab="settings" onclick="setTab('settings')">⚙️ Settings</div>
   </div>
 
   <div class="toolbar">
@@ -2343,6 +2809,7 @@ _PAGE_HTML = """
   <div id="warsView" style="display:none"></div>
   <div id="eoisView" style="display:none"></div>
   <div id="ordersView" style="display:none"></div>
+  <div id="settingsView" style="display:none"></div>
 </div>
 
 <footer>Only people with the website-access role can open this · changes apply to Discord live · made by pmxl</footer>
@@ -2380,13 +2847,17 @@ function gate(icon,title,text,actions){
   const badge=(BRAND.icon&&icon)?`<span class="gbadge">${icon}</span>`:"";
   $("gate").innerHTML=`<div class="gatecard"><div class="gicon">${logo}${badge}</div><h2>${h(title)}</h2><p class="muted">${h(text)}</p><div id="gateActions">${actions||""}</div></div>`;
 }
+function inviteBtn(){var u=(STATE.pub&&STATE.pub.invite_url)||"";return u?'<a href="'+h(u)+'" target="_blank" rel="noopener"><button class="ghost">➕ Add to your server</button></a>':"";}
 async function boot(){
   let me;try{me=await api("/api/me");}catch(e){gate("⚠️","Can't connect","Couldn't reach the server — try again.","<button onclick='boot()'>Retry</button>");return;}
   applyBrand(me.brand);
+  STATE.pub=me.public||{};STATE.owner=!!(me.user&&me.user.owner);
+  STATE.subs={};(me.guilds||[]).forEach(x=>{STATE.subs[x.id]=x.subscription||null;});
   if(!me.authed){
-    if(me.reason==="not_configured") gate("⚙️","Setup needed","The owner still needs to set DISCORD_CLIENT_SECRET and a Website access role before anyone can log in.");
-    else if(me.reason==="no_access") gate("🚫","No access","You don't have the website-access role yet. Ask leadership to give it to you, then reload this page.",'<a href="/logout"><button>Log out</button></a>');
-    else gate("","Gang Manager","Log in with Discord to manage the roster, stash, KOS, strikes and more.",'<a href="/login"><button class="discordbtn">'+DSVG+' Log in with Discord</button></a>');
+    var pricing='<a href="/pricing"><button class="ghost">💳 Pricing</button></a>';
+    if(me.reason==="not_configured") gate("⚙️","Setup needed","The owner still needs to set DISCORD_CLIENT_SECRET and a Website access role before anyone can log in.",inviteBtn()+pricing);
+    else if(me.reason==="no_access") gate("🚫","No access","You don't have the website-access role yet. Ask leadership to give it to you, then reload this page.",'<a href="/logout"><button>Log out</button></a>'+inviteBtn());
+    else gate("","Gang Manager","Log in with Discord to manage the roster, stash, KOS, strikes and more.",'<a href="/login"><button class="discordbtn">'+DSVG+' Log in with Discord</button></a>'+inviteBtn()+pricing);
     return;
   }
   show("gate",false);show("app",true);$("logoutBtn").style.display="";
@@ -2397,6 +2868,19 @@ async function boot(){
   show("guildRow",me.guilds.length>1);
   STATE.guild=me.guilds.length?me.guilds[0].id:"";
   await reload();
+}
+function renderSubBanner(){
+  var el=$("subBanner");if(!el)return;
+  var s=STATE.subs&&STATE.subs[STATE.guild];el.innerHTML="";
+  if(!s||!s.billing_enabled)return;
+  var base=(STATE.pub&&STATE.pub.stripe)?("/billing/checkout?guild="+encodeURIComponent(STATE.guild)):"/pricing";
+  if(!s.active){
+    el.innerHTML='<div class="banner bad">🔒 <b>Subscription '+(s.status==="expired"?"expired":"inactive")+'.</b> Paid features are paused in Discord. <a href="'+base+'">Renew now →</a></div>';
+  }else if(s.trial){
+    el.innerHTML='<div class="banner warn">🧪 <b>Free trial</b> — '+(s.days_left||0)+' day(s) left. <a href="'+base+'">Subscribe →</a></div>';
+  }else if(s.days_left!=null&&s.days_left<=5){
+    el.innerHTML='<div class="banner warn">⏳ Subscription renews in '+s.days_left+' day(s). <a href="'+base+'">Manage →</a></div>';
+  }
 }
 async function checkAccess(){
   try{
@@ -2414,6 +2898,8 @@ async function reload(){
     $("sub").textContent=ro.guild?.name||"Roster";
     renderStats(ov.overview);
     STATE.members=ro.members||[];STATE.ranks=ro.ranks||[];STATE.kos=ko.members||[];STATE.rank_order=ro.rank_order||[];STATE.stash=stn.items||[];STATE.stashTotal=stn.total||0;STATE.wars=wa.wars||[];STATE.eois=eo.eois||[];STATE.strikes=sk.members||[];STATE.strikeLimit=sk.limit||3;STATE.orders=od.orders||[];STATE.ticketTypes=od.types||[];STATE.ticketsOpen=od.open!==false;
+    STATE.settings=null;
+    renderSubBanner();
     render();
   }catch(e){ if(e.status===401||e.status===403) return boot(); toast(e.message||"Failed to load.","err"); }
 }
@@ -2431,10 +2917,11 @@ function renderStats(o){
 }
 function setTab(t){
   TAB=t;document.querySelectorAll(".tab").forEach(e=>e.classList.toggle("active",e.dataset.tab===t));
-  ["roster","kos","strikes","stash","wars","eois","orders"].forEach(v=>show(v+"View",t===v));
+  ["roster","kos","strikes","stash","wars","eois","orders","settings"].forEach(v=>show(v+"View",t===v));
+  var tb=document.querySelector(".toolbar");if(tb)tb.style.display=(t==="settings")?"none":"";
   $("search").placeholder={roster:"Search members…",kos:"Search KOS…",strikes:"Search struck members…",stash:"Search items…",wars:"Search wars…",eois:"Pending applications",orders:"Search orders…"}[t]||"Search…";render();
 }
-function render(){({roster:renderRoster,kos:renderKos,strikes:renderStrikes,stash:renderStash,wars:renderWars,eois:renderEois,orders:renderOrders}[TAB]||renderRoster)();}
+function render(){({roster:renderRoster,kos:renderKos,strikes:renderStrikes,stash:renderStash,wars:renderWars,eois:renderEois,orders:renderOrders,settings:renderSettings}[TAB]||renderRoster)();}
 function renderRoster(){
   const q=$("search").value.toLowerCase();
   let ms=STATE.members.filter(m=>m.name.toLowerCase().includes(q)||(m.rank||"").toLowerCase().includes(q));
@@ -2708,6 +3195,53 @@ async function removeTicketType(name){
   if(!confirm('Remove order type "'+name+'"?'))return;
   try{const r=await post("/api/ticket_type_remove",{guild:STATE.guild,name});
     STATE.ticketTypes=r.types||[];toast("Removed order type","ok");render();const f=$("otypes");if(f)f.style.display="";}
+  catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
+}
+/* ---- Settings tab ---- */
+async function renderSettings(){
+  const el=$("settingsView");
+  if(!STATE.settings){
+    el.innerHTML='<div class="card" style="text-align:center;color:#9a9aa6">Loading settings…</div>';
+    try{const r=await api("/api/settings?guild="+encodeURIComponent(STATE.guild));STATE.settings=r.settings;}
+    catch(e){if(e.status===401||e.status===403)return boot();el.innerHTML='<div class="card" style="color:#f2b8b8">'+h(e.message||"Couldn't load settings")+'</div>';return;}
+  }
+  const s=STATE.settings,pr=s.progress||{done:0,total:0};
+  const pct=pr.total?Math.round(pr.done/pr.total*100):0;
+  function opts(kind,val){
+    var list=kind==="channel"?s.channels:s.roles,pre='#';if(kind==="role")pre='@';
+    var o='<option value="">— not set —</option>';
+    list.forEach(function(x){var lk=x.locked?" 🔒":"";o+='<option value="'+h(x.id)+'"'+(x.id===val?" selected":"")+'>'+pre+h(x.name)+lk+'</option>';});
+    return o;
+  }
+  function row(it){
+    return '<div class="setrow"><label>'+it.emoji+' '+h(it.label)+'</label>'
+      +'<select onchange="setSetting(\''+it.key+'\',this.value)">'+opts(it.kind,it.value)+'</select></div>';
+  }
+  const roles=s.items.filter(i=>i.kind==="role"),mainc=s.items.filter(i=>i.kind==="channel"&&!i.is_log),logs=s.items.filter(i=>i.is_log);
+  const webOn=s.web_enabled!==false;
+  const invite=(s.invite_url)?'<a href="'+h(s.invite_url)+'" target="_blank" rel="noopener"><button class="ghost">➕ Add to another server</button></a>':"";
+  el.innerHTML=
+    '<div class="card">'
+      +'<div class="setuptop"><div><h3 style="margin:0">⚙️ Setup</h3>'
+      +'<div class="muted" style="font-size:13px">'+pr.done+' of '+pr.total+' configured — pick a channel or role for each.</div></div>'
+      +'<div style="text-align:right">'+invite+'</div></div>'
+      +'<div class="pbar"><div class="pfill" style="width:'+pct+'%"></div></div>'
+    +'</div>'
+    +'<div class="card"><div class="setrow toggle"><label>🌐 Website panel</label>'
+      +'<button class="tgl '+(webOn?'on':'')+'" onclick="toggleWeb('+(!webOn)+')">'+(webOn?'On':'Off')+'</button></div>'
+      +'<div class="muted" style="font-size:12px;margin-top:4px">Turn the whole web panel off for this server. You can switch it back on here any time.</div></div>'
+    +'<div class="card"><h4>👑 Roles</h4>'+roles.map(row).join("")+'</div>'
+    +'<div class="card"><h4>📁 Channels</h4>'+mainc.map(row).join("")+'</div>'
+    +'<div class="card"><h4>📝 Log channels</h4>'
+      +'<div class="muted" style="font-size:12px;margin-bottom:6px">Tip: run <code>/settings logs_setup</code> in Discord to auto-create all of these at once.</div>'
+      +logs.map(row).join("")+'</div>';
+}
+async function setSetting(key,value){
+  try{const r=await post("/api/setting_set",{guild:STATE.guild,key,value});STATE.settings=r.settings;toast("Saved","ok");renderSettings();}
+  catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");STATE.settings=null;renderSettings();}
+}
+async function toggleWeb(on){
+  try{const r=await post("/api/web_toggle",{guild:STATE.guild,enabled:on});toast("Website panel "+(r.enabled?"on":"off"),"ok");STATE.settings=null;renderSettings();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 boot();

@@ -35,6 +35,21 @@ DATA_FILE = os.getenv("DATA_FILE", "gang_data.json")
 _allowed_raw = os.getenv("ALLOWED_GUILD_IDS", "").replace(" ", "")
 ALLOWED_GUILD_IDS = {int(x) for x in _allowed_raw.split(",") if x.isdigit()}
 
+# ---- Subscription / billing ------------------------------------------------- #
+# When BILLING_ENABLED is off (default), every server is treated as active, so
+# existing installs are never locked out. Flip it on to require a subscription.
+BILLING_ENABLED = os.getenv("BILLING_ENABLED", "").lower() in ("1", "true", "yes", "on")
+# Bot operator(s) — comma-separated Discord user IDs. They bypass the gate and
+# can grant/extend subscriptions manually with /subscription grant.
+_owner_raw = os.getenv("BOT_OWNER_IDS", "").replace(" ", "")
+BOT_OWNER_IDS = {int(x) for x in _owner_raw.split(",") if x.isdigit()}
+# Free trial length (days) granted automatically the first time the bot joins a
+# server. 0 disables the auto-trial.
+try:
+    TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "7") or 0)
+except ValueError:
+    TRIAL_DAYS = 7
+
 EMBED_COLOR = 0xE11D48  # deep red, fits the "gang" vibe
 
 # --------------------------------------------------------------------------- #
@@ -168,6 +183,22 @@ def guild_store(data: dict[str, Any], guild_id: int) -> dict[str, Any]:
     g.setdefault("strike_limit", 3)
     g.setdefault("bank", {"balance": 0, "tx": []})
     g.setdefault("wars", [])
+    # Master on/off switch for the website panel (toggled from the site/commands)
+    g.setdefault("web_enabled", True)
+    # Per-server subscription. status: none | trial | active | expired.
+    # expires_at is ISO8601 (None = lifetime). See billing.py.
+    g.setdefault(
+        "subscription",
+        {
+            "status": "none",
+            "plan": None,
+            "expires_at": None,
+            "trial_used": False,
+            "customer_id": None,
+            "sub_id": None,
+            "updated_at": None,
+        },
+    )
     return g
 
 
