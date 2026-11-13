@@ -2537,13 +2537,88 @@ footer{text-align:center;padding:40px 22px;color:#6f6f78;font-size:13px;border-t
 footer a{color:var(--silver)}
 .bignote{text-align:center;max-width:680px;margin:0 auto;padding:40px 30px;border-radius:26px;border:1px solid var(--line);
  background:linear-gradient(130deg,rgba(30,30,38,.7),rgba(8,8,11,.7))}
+/* ---- headline shimmer ---- */
+h1 .g{background-size:200% 100%;animation:sheen 6s ease-in-out infinite}
+@keyframes sheen{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+/* ---- cursor glow ---- */
+.glow{position:fixed;left:0;top:0;width:560px;height:560px;margin:-280px 0 0 -280px;border-radius:50%;pointer-events:none;z-index:-1;
+ background:radial-gradient(circle,rgba(255,255,255,.075),transparent 62%);opacity:0;transition:opacity .5s;will-change:transform}
+/* ---- product mockup ---- */
+.mockwrap{max-width:1020px;margin:6px auto 0;padding:0 22px;perspective:1600px}
+.mock{border-radius:18px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(180deg,rgba(22,22,28,.94),rgba(10,10,14,.94));
+ box-shadow:0 50px 120px rgba(0,0,0,.6),0 0 80px rgba(255,255,255,.05);overflow:hidden;transform:rotateX(16deg) scale(.96);
+ transform-origin:50% 0;transition:transform .9s cubic-bezier(.2,.7,.2,1);will-change:transform}
+.mock.up{transform:rotateX(3deg) scale(1)}
+.mock.tilt{transition:transform .12s linear}
+.mbar{display:flex;align-items:center;gap:7px;padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+.mbar i{width:11px;height:11px;border-radius:50%;background:#3a3a44}
+.mbar i:nth-child(1){background:#ff5f57}.mbar i:nth-child(2){background:#febc2e}.mbar i:nth-child(3){background:#28c840}
+.mbar span{margin-left:12px;font-size:12px;color:#7a7a84;padding:4px 14px;border-radius:8px;background:rgba(255,255,255,.05)}
+.mbody{display:grid;grid-template-columns:172px 1fr;min-height:330px}
+.mside{border-right:1px solid rgba(255,255,255,.07);padding:14px 10px;display:flex;flex-direction:column;gap:3px}
+.mside img{width:58px;height:34px;object-fit:contain;margin:2px 8px 12px}
+.mside a{font-size:13px;color:#8d8d97;padding:8px 10px;border-radius:9px;font-weight:600}
+.mside a.on{background:rgba(255,255,255,.09);color:#fff}
+.mmain{padding:16px;display:flex;flex-direction:column;gap:14px;text-align:left}
+.mstats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.mstats div{padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+.mstats b{display:block;font-size:24px;font-weight:850}
+.mstats span{font-size:10.5px;color:#7d7d87;text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+.mgrid{display:grid;grid-template-columns:1.3fr 1fr;gap:12px}
+.mcard{padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+.mcard h5{font-size:11.5px;color:#9a9aa6;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px}
+.mrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid rgba(255,255,255,.05);font-size:13.5px}
+.mrow:first-of-type{border-top:none}
+.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;color:#09090c;flex:none}
+.mrow b{flex:1;font-weight:650}
+.mrow em{font-style:normal;font-size:11px;font-weight:800;padding:3px 8px;border-radius:7px;background:rgba(255,255,255,.08)}
+.mrow em.r1{background:linear-gradient(90deg,#c9c9d2,#fff);color:#09090c}
+.score{display:flex;align-items:baseline;gap:10px;font-size:46px;font-weight:900;line-height:1;margin:6px 0 12px}
+.score .dim{color:#5e5e68}.score span{font-size:28px;color:#5e5e68}
+.wbar{height:8px;border-radius:6px;background:rgba(239,68,68,.35);overflow:hidden}
+.wbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4ade80,#22c55e);border-radius:6px;transition:width 1.4s cubic-bezier(.2,.7,.2,1)}
+.mock.up .wbar i{width:62%}
+.rounds{margin-top:12px;font-size:15px;letter-spacing:2px}
+.livedot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-right:6px;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:ping 1.8s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(34,197,94,.6)}80%,100%{box-shadow:0 0 0 9px rgba(34,197,94,0)}}
+@media(max-width:760px){.mbody{grid-template-columns:1fr}.mside{display:none}.mstats{grid-template-columns:repeat(2,1fr)}.mgrid{grid-template-columns:1fr}.mock,.mock.up{transform:none}}
+/* ---- Discord showcase ---- */
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;align-items:start}
+.dmsg{display:flex;gap:12px;padding:16px;border-radius:16px;background:#2b2d31;border:1px solid rgba(255,255,255,.06);
+ box-shadow:0 24px 60px rgba(0,0,0,.45);font-family:"gg sans","Noto Sans",Inter,-apple-system,sans-serif;transition:transform .25s}
+.dmsg:hover{transform:translateY(-4px)}
+.dav{width:40px;height:40px;border-radius:50%;background:#111214;display:grid;place-items:center;flex:none;overflow:hidden}
+.dav img{width:34px;height:22px;object-fit:contain}
+.dcol{flex:1;min-width:0}
+.dname{font-weight:700;font-size:15px;color:#f2f3f5;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dbot{font-size:10px;font-weight:700;background:#5865f2;color:#fff;padding:1px 5px;border-radius:4px;letter-spacing:.2px}
+.dname time{font-weight:500;font-size:12px;color:#949ba4}
+.demb{margin-top:8px;border-left:4px solid var(--c);background:#232428;border-radius:4px;padding:12px 14px;color:#dbdee1;font-size:14px;line-height:1.45}
+.demb b{display:block;color:#f2f3f5;margin-bottom:8px}
+.dscore{font-size:34px;font-weight:900;color:#fff;letter-spacing:1px}.dscore span{color:#80848e;font-size:24px}
+.dbar{height:7px;border-radius:5px;background:rgba(237,66,69,.5);overflow:hidden;margin:10px 0 6px}.dbar i{display:block;height:100%;background:#23a55a}
+.dsmall{font-size:12.5px;color:#b5bac1}
+.drounds{margin-top:8px;letter-spacing:2px}
+.dfields{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.dfields div{font-size:13px;color:#dbdee1}.dfields i{display:block;font-style:normal;font-weight:700;color:#f2f3f5;font-size:12.5px;margin-bottom:2px}
+.dbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.dbtn{font-size:13px;font-weight:600;padding:6px 12px;border-radius:4px;background:#4e5058;color:#fff}
+.dbtn.g{background:#248046}.dbtn.r{background:#da373c}.dbtn.b{background:#5865f2}
+.dvote{height:7px;border-radius:5px;background:rgba(237,66,69,.5);overflow:hidden;margin:10px 0 4px}.dvote i{display:block;height:100%;width:87%;background:#23a55a}
+/* ---- pricing: rotating light border ---- */
+@property --ang{syntax:"<angle>";initial-value:0deg;inherits:false}
+.price::before{background:conic-gradient(from var(--ang),transparent 0deg,rgba(255,255,255,.8) 50deg,transparent 120deg,transparent 360deg);
+ animation:spinb 5s linear infinite}
+@keyframes spinb{to{--ang:360deg}}
+@media(prefers-reduced-motion:reduce){.price::before,h1 .g,.aurora i,.marq .row,.livedot{animation:none}.mock{transition:none}}
 </style></head><body>
-<div class=aurora><i></i><i></i><i></i></div><div class=grain></div>
+<div class=aurora><i></i><i></i><i></i></div><div class=grain></div><div class=glow id=glow></div>
 
 <nav>
   <a class=brand href="/"><img src="/gm-logo.png" alt="GM">GANG MANAGER</a>
   <div class=navlinks>
     <a href="#features" class=hidem>Features</a>
+    <a href="#discord" class=hidem>In Discord</a>
     <a href="#how" class=hidem>How it works</a>
     <a href="#pricing" class=hidem>Pricing</a>
     <a id="navCta" class="btn sm primary" href="/login">Open panel</a>
@@ -2562,6 +2637,41 @@ footer a{color:var(--silver)}
   <div class=trust id="heroStatus">Log in with Discord · $7.99 / month · 1 server per subscription</div>
 </header>
 
+<div class=mockwrap>
+  <div class=mock id=mock aria-hidden=true>
+    <div class=mbar><i></i><i></i><i></i><span>gang manager · admin panel</span></div>
+    <div class=mbody>
+      <div class=mside>
+        <img src="/gm-logo.png" alt="">
+        <a class=on>👥 Roster</a><a>💀 KOS</a><a>⚔️ Wars</a><a>🎫 Orders</a><a>📨 EOIs</a><a>⚙️ Settings</a>
+      </div>
+      <div class=mmain>
+        <div class=mstats>
+          <div><b data-n="48">0</b><span>Ranked</span></div>
+          <div><b data-n="7">0</b><span>On KOS</span></div>
+          <div><b data-n="12">0</b><span>Open orders</span></div>
+          <div><b data-n="3">0</b><span>Pending EOIs</span></div>
+        </div>
+        <div class=mgrid>
+          <div class=mcard>
+            <h5>Roster</h5>
+            <div class=mrow><span class=av style="background:#d9d9e3">S</span><b>Shadow</b><em class=r1>Boss</em></div>
+            <div class=mrow><span class=av style="background:#c4cfe8">V</span><b>Vex</b><em>Underboss</em></div>
+            <div class=mrow><span class=av style="background:#e3d2c4">R</span><b>Riot</b><em>Enforcer</em></div>
+            <div class=mrow><span class=av style="background:#cde3cf">N</span><b>Nova</b><em>Enforcer</em></div>
+          </div>
+          <div class=mcard>
+            <h5><span class=livedot></span>War · vs Night Riders</h5>
+            <div class=score><b>5</b><span>:</span><b class=dim>3</b></div>
+            <div class=wbar><i></i></div>
+            <div class=rounds>🟩🟩🟥🟩🟥🟩🟩🟥</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class=marq><div class=row id="marqRow"></div></div>
 
 <section id=features>
@@ -2571,12 +2681,68 @@ footer a{color:var(--silver)}
   <div class=grid id="featGrid"></div>
 </section>
 
+<section id=discord>
+  <div class="kicker rev">Right inside Discord</div>
+  <h2 class=rev>Looks this good in your server.</h2>
+  <p class="sub rev">Live cards your members actually use — scoreboards, orders and applications that update themselves.</p>
+  <div class=dgrid>
+    <div class="dmsg rev">
+      <div class=dav><img src="/gm-logo.png" alt=""></div>
+      <div class=dcol>
+        <div class=dname>Gang Manager <span class=dbot>APP</span><time>Today at 9:41 PM</time></div>
+        <div class=demb style="--c:#23a55a">
+          <b>⚔️ War · Tenshi vs Night Riders</b>
+          <div class=dscore>5 <span>—</span> 3</div>
+          <div class=dbar><i style="width:62%"></i></div>
+          <div class=dsmall>Win rate 62% · first to 7</div>
+          <div class=drounds>🟩🟩🟥🟩🟥🟩🟩🟥</div>
+        </div>
+        <div class=dbtns><span class="dbtn g">🏆 Round won</span><span class="dbtn r">💀 Round lost</span><span class=dbtn>↩️ Undo</span></div>
+      </div>
+    </div>
+    <div class="dmsg rev">
+      <div class=dav><img src="/gm-logo.png" alt=""></div>
+      <div class=dcol>
+        <div class=dname>Gang Manager <span class=dbot>APP</span><time>Today at 9:44 PM</time></div>
+        <div class=demb style="--c:#f0b232">
+          <b>🎫 Order #42 · P90 Order</b>
+          <div class=dfields>
+            <div><i>Customer</i>@Vex</div>
+            <div><i>Items</i>P90 × 4</div>
+            <div><i>Priority</i>🚩 High</div>
+            <div><i>Payment</i>❌ Unpaid</div>
+          </div>
+        </div>
+        <div class=dbtns><span class="dbtn g">💰 Mark paid</span><span class=dbtn>🚩 Priority</span><span class="dbtn r">🔒 Close</span></div>
+      </div>
+    </div>
+    <div class="dmsg rev">
+      <div class=dav><img src="/gm-logo.png" alt=""></div>
+      <div class=dcol>
+        <div class=dname>Gang Manager <span class=dbot>APP</span><time>Today at 9:52 PM</time></div>
+        <div class=demb style="--c:#5865f2">
+          <b>📨 New application · Riot</b>
+          <div class=dfields>
+            <div><i>Role</i>Enforcer</div>
+            <div><i>Active</i>Daily</div>
+            <div><i>Vouched by</i>@Shadow</div>
+            <div><i>Closes</i>in 24 hours</div>
+          </div>
+          <div class=dvote><i></i></div>
+          <div class=dsmall>✅ 7 · ❌ 1</div>
+        </div>
+        <div class=dbtns><span class="dbtn g">✅ Yes · 7</span><span class="dbtn r">❌ No · 1</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id=how>
   <div class="kicker rev">Live in two minutes</div>
   <h2 class=rev>How it works</h2>
   <p class="sub rev">No hosting, no config files. Add it and you're running.</p>
   <div class=steps>
-    <div class="step rev"><div class=ic>➕</div><h4>Add the bot</h4><p>One click from this site invites Gang Manager to your server.</p></div>
+    <div class="step rev"><div class=ic>➕</div><h4>Add the bot</h4><p>Log in with Discord, pick your server, and add Gang Manager in one click.</p></div>
     <div class="step rev"><div class=ic>💳</div><h4>Subscribe</h4><p>Pick your server and subscribe — $7.99 a month, cancel anytime.</p></div>
     <div class="step rev"><div class=ic>⚙️</div><h4>Set it up</h4><p>Pick your channels and roles from dropdowns in the web panel.</p></div>
     <div class="step rev"><div class=ic>🚀</div><h4>Run your gang</h4><p>Roster, tickets, wars and more — all live, all logged.</p></div>
@@ -2585,8 +2751,8 @@ footer a{color:var(--silver)}
 
 <section>
   <div class=stats>
-    <div class="statc rev"><b>8</b><span>Modules</span></div>
-    <div class="statc rev"><b>50+</b><span>Commands</span></div>
+    <div class="statc rev"><b data-n="8">0</b><span>Modules</span></div>
+    <div class="statc rev"><b data-n="50" data-suf="+">0</b><span>Commands</span></div>
     <div class="statc rev"><b>2 min</b><span>Setup</span></div>
     <div class="statc rev"><b>24/7</b><span>Hosted</span></div>
   </div>
@@ -2660,12 +2826,41 @@ document.addEventListener("mousemove",function(e){
 // reveal on scroll
 var io=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){x.target.classList.add("in");io.unobserve(x.target);}});},{threshold:.12});
 document.querySelectorAll(".rev").forEach(function(e,i){e.style.transitionDelay=(i%4*60)+"ms";io.observe(e);});
+var REDUCE=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// count-up numbers when they scroll into view
+function countUp(el){
+ var to=parseInt(el.getAttribute("data-n"),10)||0,suf=el.getAttribute("data-suf")||"";
+ if(REDUCE){el.textContent=to+suf;return;}
+ var t0=performance.now(),dur=1100;
+ (function step(t){var p=Math.min((t-t0)/dur,1);el.textContent=Math.round(to*(1-Math.pow(1-p,3)))+suf;if(p<1)requestAnimationFrame(step);})(t0);
+}
+var cio=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){countUp(x.target);cio.unobserve(x.target);}});},{threshold:.4});
+document.querySelectorAll("[data-n]").forEach(function(e){cio.observe(e);});
+// product mockup: straightens as it scrolls in, tilts toward the cursor
+var mock=document.getElementById("mock"),mw=document.querySelector(".mockwrap");
+if(mock){
+ var mio=new IntersectionObserver(function(es){es.forEach(function(x){if(x.isIntersecting){mock.classList.add("up");mio.unobserve(mock);}});},{threshold:.2});
+ mio.observe(mock);
+ if(!REDUCE&&window.innerWidth>760&&mw){
+  mw.addEventListener("mousemove",function(e){var r=mw.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+   mock.classList.add("tilt");mock.style.transform="rotateX("+(3-y*7).toFixed(2)+"deg) rotateY("+(x*9).toFixed(2)+"deg)";});
+  mw.addEventListener("mouseleave",function(){mock.classList.remove("tilt");mock.style.transform="";});
+ }
+}
+// soft light that follows the cursor
+var glow=document.getElementById("glow");
+if(glow&&!REDUCE&&window.matchMedia("(pointer:fine)").matches){
+ var gx=0,gy=0,pending=false;
+ document.addEventListener("mousemove",function(e){gx=e.clientX;gy=e.clientY;glow.style.opacity="1";
+  if(!pending){pending=true;requestAnimationFrame(function(){glow.style.transform="translate("+gx+"px,"+gy+"px)";pending=false;});}});
+ document.addEventListener("mouseleave",function(){glow.style.opacity="0";});
+}
 // adapt to auth + subscription (invite buttons always route through /invite,
 // which forces Discord login before the bot can be added)
 fetch("/api/me").then(function(r){return r.json();}).then(function(me){
  var pub=me.public||{};
  var buy=document.getElementById("buyBtn"),nav=document.getElementById("navCta"),panel=document.getElementById("panelBtn");
- var checkout=(pub.stripe)?"/billing/checkout":"/panel";
+ var checkout="/billing/checkout";
  if(me.authed){
    nav.href="/panel";nav.textContent="Open panel";panel.href="/panel";
    var gs=me.guilds||[],act=gs.find(function(x){return x.subscription&&x.subscription.active;});
@@ -2673,11 +2868,12 @@ fetch("/api/me").then(function(r){return r.json();}).then(function(me){
      buy.textContent="Open your panel";buy.href="/panel";
      document.getElementById("heroStatus").textContent="✓ You're subscribed on "+act.name+" — open your panel";
    }else if(gs.length){
-     buy.textContent=(pub.stripe?"Subscribe — $7.99/mo":"Open panel");buy.href=checkout;
+     buy.textContent="Subscribe — $7.99/mo";buy.href=checkout;
      document.getElementById("heroStatus").textContent="You're logged in — subscribe to unlock your server";
    }else{
-     buy.textContent="➕ Add the bot";buy.href="/invite";
-     document.getElementById("heroStatus").textContent="You're logged in — add the bot to your server to start";
+     buy.textContent="➕ Pick your server";buy.href="/panel";
+     nav.href="/panel";nav.textContent="Pick a server";
+     document.getElementById("heroStatus").textContent="You're logged in — pick a server to add the bot to";
    }
  }else{
    nav.textContent="Log in";nav.href="/login";
