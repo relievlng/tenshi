@@ -2106,7 +2106,7 @@ async def _h_pricing(request):
 async def _h_invite(request):
     """Login-gated bot invite. Only a signed-in user can add the bot; they land
     back on the panel afterward. The bot itself still enforces the subscription
-    once it's in the server (free trial first, then paywall)."""
+    once it's in the server (it stays locked until the server subscribes)."""
     uid = _read_session(request.cookies.get(_COOKIE))
     if not uid:
         return _aioweb.HTTPFound("/login")
@@ -2237,12 +2237,12 @@ footer a{color:var(--silver)}
   <div class=eyebrow>✦ <b>Live</b> · all-in-one FiveM gang toolkit</div>
   <img class=herologo src="/gm-logo.png" alt="Gang Manager">
   <h1>Run your gang<br><span class=g>like a machine.</span></h1>
-  <p class=lead>Roster, KOS, strikes, wars, tickets and recruitment — one Discord bot with a full web control panel. Add it, start your free trial, and command everything from the browser.</p>
+  <p class=lead>Roster, KOS, strikes, wars, tickets and recruitment — one Discord bot with a full web control panel. Add it, subscribe, and command everything from the browser.</p>
   <div class=cta>
     <a id="heroInvite" class="btn primary" href="/invite">➕ Add to Discord</a>
     <a class="btn" href="#pricing">See pricing</a>
   </div>
-  <div class=trust id="heroStatus">Log in with Discord · 7-day free trial · 1 server per subscription</div>
+  <div class=trust id="heroStatus">Log in with Discord · $7.99 / month · 1 server per subscription</div>
 </header>
 
 <div class=marq><div class=row id="marqRow"></div></div>
@@ -2260,7 +2260,7 @@ footer a{color:var(--silver)}
   <p class="sub rev">No hosting, no config files. Add it and you're running.</p>
   <div class=steps>
     <div class="step rev"><div class=ic>➕</div><h4>Add the bot</h4><p>One click from this site invites Gang Manager to your server.</p></div>
-    <div class="step rev"><div class=ic>🧪</div><h4>Free trial starts</h4><p>Every new server gets a 7-day trial automatically — no card needed.</p></div>
+    <div class="step rev"><div class=ic>💳</div><h4>Subscribe</h4><p>Pick your server and subscribe — $7.99 a month, cancel anytime.</p></div>
     <div class="step rev"><div class=ic>⚙️</div><h4>Set it up</h4><p>Pick your channels and roles from dropdowns in the web panel.</p></div>
     <div class="step rev"><div class=ic>🚀</div><h4>Run your gang</h4><p>Roster, tickets, wars and more — all live, all logged.</p></div>
   </div>
@@ -2299,7 +2299,7 @@ footer a{color:var(--silver)}
   <h2 class=rev>Good to know</h2>
   <div class="faq rev" style="margin-top:28px">
     <details><summary>Can I use one subscription on multiple servers?</summary><p>No — each subscription covers one server. To run Gang Manager in another server, add it there and start a separate subscription for it.</p></details>
-    <details><summary>Is there a free trial?</summary><p>Yes. Every server gets a 7-day trial automatically the moment you add the bot — no card required.</p></details>
+    <details><summary>How much does it cost?</summary><p>$7.99 a month per Discord server. Add the bot, subscribe, and everything unlocks. Cancel anytime.</p></details>
     <details><summary>Do I need to host anything?</summary><p>No. Gang Manager is fully hosted and online 24/7. Add it from this site and it just works.</p></details>
     <details><summary>Can I cancel?</summary><p>Anytime. Your access stays active until the end of the period you've paid for.</p></details>
   </div>
@@ -2308,7 +2308,7 @@ footer a{color:var(--silver)}
 <section>
   <div class="bignote rev">
     <h2 style="margin-bottom:10px">Ready to take over the city?</h2>
-    <p class=sub style="margin-bottom:24px">Add Gang Manager and start your free trial right now.</p>
+    <p class=sub style="margin-bottom:24px">Add Gang Manager and subscribe to unlock everything.</p>
     <div class=cta>
       <a id="inviteBtn3" class="btn primary" href="/invite">➕ Add to Discord</a>
       <a id="panelBtn" class="btn" href="/login">Open the panel</a>
@@ -3349,7 +3349,7 @@ async function boot(){
   if(!me.authed){
     var pricing='<a href="/pricing"><button class="ghost">💳 Pricing</button></a>';
     if(me.reason==="not_configured") gate("⚙️","Setup needed","The owner still needs to set DISCORD_CLIENT_SECRET before anyone can log in.",inviteBtn()+pricing);
-    else if(me.reason==="no_access") gate("➕","Add your server","You're logged in! Add Gang Manager to a server you own to get started — you get a 7-day free trial, then you can subscribe here. Already added it? Reload.",'<a href="/invite"><button class="discordbtn">➕ Add to Discord</button></a><button onclick="boot()">↻ Reload</button><a href="/logout"><button>Log out</button></a>');
+    else if(me.reason==="no_access") gate("➕","Add your server","You're logged in! Add Gang Manager to a server you own, then subscribe here to activate it. Already added it? Reload.",'<a href="/invite"><button class="discordbtn">➕ Add to Discord</button></a><button onclick="boot()">↻ Reload</button><a href="/logout"><button>Log out</button></a>');
     else gate("","Gang Manager","Log in with Discord to manage the roster, stash, KOS, strikes and more.",'<a href="/login"><button class="discordbtn">'+DSVG+' Log in with Discord</button></a>'+inviteBtn()+pricing);
     return;
   }
@@ -3374,9 +3374,7 @@ function renderSubBanner(){
   if(!s||!s.billing_enabled)return;
   var base=(STATE.pub&&STATE.pub.stripe)?("/billing/checkout?guild="+encodeURIComponent(STATE.guild)):"/pricing";
   if(!s.active){
-    el.innerHTML='<div class="banner bad">🔒 <b>Subscription '+(s.status==="expired"?"expired":"inactive")+'.</b> Paid features are paused in Discord. <a href="'+base+'">Renew now →</a></div>';
-  }else if(s.trial){
-    el.innerHTML='<div class="banner warn">🧪 <b>Free trial</b> — '+(s.days_left||0)+' day(s) left. <a href="'+base+'">Subscribe →</a></div>';
+    el.innerHTML='<div class="banner bad">🔒 <b>Subscription '+(s.status==="expired"?"expired":"inactive")+'.</b> Paid features are paused in Discord. <a href="'+base+'">Subscribe now →</a></div>';
   }else if(s.days_left!=null&&s.days_left<=5){
     el.innerHTML='<div class="banner warn">⏳ Subscription renews in '+s.days_left+' day(s). <a href="'+base+'">Manage →</a></div>';
   }

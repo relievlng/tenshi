@@ -43,12 +43,12 @@ BILLING_ENABLED = os.getenv("BILLING_ENABLED", "").lower() in ("1", "true", "yes
 # can grant/extend subscriptions manually with /subscription grant.
 _owner_raw = os.getenv("BOT_OWNER_IDS", "").replace(" ", "")
 BOT_OWNER_IDS = {int(x) for x in _owner_raw.split(",") if x.isdigit()}
-# Free trial length (days) granted automatically the first time the bot joins a
-# server. 0 disables the auto-trial.
+# Free trial length (days). 0 (the default) means no trial — servers must
+# subscribe to activate.
 try:
-    TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "7") or 0)
+    TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "0") or 0)
 except ValueError:
-    TRIAL_DAYS = 7
+    TRIAL_DAYS = 0
 
 EMBED_COLOR = 0xE11D48  # deep red, fits the "gang" vibe
 

@@ -117,14 +117,6 @@ async def on_guild_join(guild: discord.Guild) -> None:
             pass
         return
 
-    # New server: start the one-time free trial automatically (if enabled).
-    try:
-        state = start_trial(guild.id)
-        if state is not None:
-            log.info("Started free trial for %s (%s): %s days", guild.name, guild.id, state["days_left"])
-    except Exception as exc:  # never let billing break a join
-        log.error("trial start failed for %s: %s", guild.id, exc)
-
 
 @bot.event
 async def on_member_join(member: discord.Member) -> None:

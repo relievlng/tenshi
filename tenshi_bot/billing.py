@@ -328,28 +328,6 @@ async def subscription_status(interaction: discord.Interaction) -> None:
     await interaction.response.send_message(embed=_fmt_state(interaction.guild, state), ephemeral=True)
 
 
-@subscription_group.command(name="trial", description="Start this server's one-time free trial")
-async def subscription_trial(interaction: discord.Interaction) -> None:
-    guild = interaction.guild
-    if guild is None:
-        await interaction.response.send_message("Run this in a server.", ephemeral=True)
-        return
-    if not (is_leadership(interaction.user) or is_owner(interaction.user.id)):
-        await interaction.response.send_message("Only leadership can start the trial.", ephemeral=True)
-        return
-    state = start_trial(guild.id)
-    if state is None:
-        await interaction.response.send_message(
-            "This server has already used its free trial. Use `/subscription status` to subscribe.",
-            ephemeral=True,
-        )
-        return
-    store = guild_store(DATA, guild.id)
-    await send_log(guild, store, f"🧪 Free trial started ({state['days_left']} days).",
-                   category="web", actor=interaction.user)
-    await interaction.response.send_message(embed=_fmt_state(guild, state), ephemeral=True)
-
-
 @subscription_group.command(name="grant", description="[Owner] Activate/extend a server's subscription")
 @app_commands.describe(
     days="Days to add (use 0 with lifetime:true for a permanent grant)",
