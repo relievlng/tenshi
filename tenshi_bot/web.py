@@ -1214,21 +1214,62 @@ def _guild_from(gid: str | None):
 
 
 async def _h_index(request):
-    note_base_url(_canonical_base(request))  # so links the bot posts point here
-    return _aioweb.Response(text=_PAGE_HTML, content_type="text/html")
+    base = _canonical_base(request)
+    note_base_url(base)  # so links the bot posts point here
+    page = _PAGE_HTML.replace("<!--GM_HEAD-->", _head_meta(base, "Gang Manager · Panel", _SITE_DESC), 1)
+    return _aioweb.Response(text=page, content_type="text/html")
 
 
-_LOGO_PATH = os.path.join(os.path.dirname(__file__), "gm-logo.png")
+_ASSET_DIR = os.path.dirname(__file__)
+# URL path -> (file in the package, content type). The GM logo everywhere.
+_ASSETS = {
+    "/gm-logo.png": ("gm-logo.png", "image/png"),
+    "/gm-icon.png": ("gm-icon.png", "image/png"),
+    "/apple-touch-icon.png": ("gm-icon.png", "image/png"),
+    "/gm-og.png": ("gm-og.png", "image/png"),
+    "/favicon.ico": ("favicon.ico", "image/x-icon"),
+}
+_ASSET_CACHE: dict[str, bytes] = {}
 
 
-async def _h_logo(request):
-    try:
-        with open(_LOGO_PATH, "rb") as f:
-            data = f.read()
-    except OSError:
+async def _h_asset(request):
+    name, ctype = _ASSETS.get(request.path, (None, None))
+    if not name:
         return _aioweb.Response(status=404)
-    return _aioweb.Response(body=data, content_type="image/png",
+    data = _ASSET_CACHE.get(name)
+    if data is None:
+        try:
+            with open(os.path.join(_ASSET_DIR, name), "rb") as f:
+                data = f.read()
+        except OSError:
+            return _aioweb.Response(status=404)
+        _ASSET_CACHE[name] = data
+    return _aioweb.Response(body=data, content_type=ctype,
                             headers={"Cache-Control": "public, max-age=86400"})
+
+
+def _head_meta(base: str, title: str, desc: str) -> str:
+    """Favicon + link-preview tags (Discord, etc.) so the GM logo shows up
+    wherever the site is opened or shared."""
+    base = (base or "").rstrip("/")
+    t, d = html.escape(title, quote=True), html.escape(desc, quote=True)
+    return (
+        '<link rel="icon" type="image/png" href="/gm-icon.png">'
+        '<link rel="apple-touch-icon" href="/apple-touch-icon.png">'
+        '<meta name="theme-color" content="#0b0b10">'
+        '<meta property="og:type" content="website">'
+        '<meta property="og:site_name" content="Gang Manager">'
+        f'<meta property="og:title" content="{t}">'
+        f'<meta property="og:description" content="{d}">'
+        f'<meta property="og:image" content="{base}/gm-og.png">'
+        '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">'
+        '<meta name="twitter:card" content="summary_large_image">'
+        f'<meta name="twitter:image" content="{base}/gm-og.png">'
+    )
+
+
+_SITE_DESC = ("Roster, KOS, strikes, wars, tickets and recruitment — one Discord bot "
+              "with a full web control panel for your FiveM gang.")
 
 
 def _legal_page(title: str, body: str) -> str:
@@ -1236,7 +1277,8 @@ def _legal_page(title: str, body: str) -> str:
         "<!doctype html><html lang=en><head><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
         f"<title>{title} · Gang Manager</title>"
-        "<style>"
+        + _head_meta(web_base_url(), f"{title} · Gang Manager", _SITE_DESC)
+        + "<style>"
         "body{margin:0;background:#07070a;color:#e9e9ef;"
         "font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.65}"
         ".wrap{max-width:760px;margin:0 auto;padding:48px 22px 80px}"
@@ -1416,7 +1458,9 @@ def _simple_page(icon: str, title: str, text: str, actions: str = "", status: in
     doc = (
         "<!doctype html><html lang=en><head><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
-        f"<title>{html.escape(title)} · Gang Manager</title><style>"
+        f"<title>{html.escape(title)} · Gang Manager</title>"
+        + _head_meta(web_base_url(), f"{title} · Gang Manager", _SITE_DESC)
+        + "<style>"
         ":root{color-scheme:dark}*{box-sizing:border-box}"
         "body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;color:#ececf1;"
         "font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
@@ -2437,6 +2481,7 @@ _LANDING_HTML = r"""<!doctype html><html lang=en><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Gang Manager — the all-in-one FiveM gang bot</title>
 <meta name=description content="Roster, KOS, strikes, wars, tickets, recruitment and a full web control panel — one Discord bot for your FiveM gang.">
+<!--GM_HEAD-->
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#060608;--pane:rgba(14,14,18,.66);--line:rgba(255,255,255,.12);--txt:#ececf1;--mute:#9a9aa6;--silver:#c9c9d2;--radius:20px}
@@ -2885,8 +2930,12 @@ fetch("/api/me").then(function(r){return r.json();}).then(function(me){
 
 
 async def _h_landing(request):
-    note_base_url(_canonical_base(request))
-    return _aioweb.Response(text=_LANDING_HTML, content_type="text/html")
+    base = _canonical_base(request)
+    note_base_url(base)
+    page = _LANDING_HTML.replace(
+        "<!--GM_HEAD-->", _head_meta(base, "Gang Manager — the all-in-one FiveM gang bot", _SITE_DESC), 1
+    )
+    return _aioweb.Response(text=page, content_type="text/html")
 
 
 def _pick_billing_guild(request):
@@ -3463,7 +3512,7 @@ async def start_web_server() -> None:
         [
             _aioweb.get("/", _h_landing),
             _aioweb.get("/panel", _h_index),
-            _aioweb.get("/gm-logo.png", _h_logo),
+            *[_aioweb.get(path, _h_asset) for path in _ASSETS],
             _aioweb.get("/terms", _h_terms),
             _aioweb.get("/privacy", _h_privacy),
             _aioweb.get("/pricing", _h_landing),
@@ -3529,6 +3578,7 @@ _PAGE_HTML = """
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gang Manager</title>
+<!--GM_HEAD-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
@@ -3960,7 +4010,7 @@ _PAGE_HTML = """
 <body>
 <div class="aura"><i></i><i></i><i></i></div>
 <header>
-  <div class="logo" id="brandLogo">🐉</div>
+  <div class="logo hasimg" id="brandLogo"><img src="/gm-logo.png" alt="Gang Manager"></div>
   <div class="brand">GANG MANAGER<small id="sub">Admin Panel</small></div>
   <div id="userChip" class="userchip" style="display:none"><img id="userAv" alt=""><span id="userName"></span><span id="opBadge" class="opbadge" style="display:none">BOT OWNER</span></div>
   <a id="headerInvite" href="/invite" target="_blank" rel="noopener" style="display:none"><button class="ghost">➕ Add to a server</button></a>
@@ -3970,7 +4020,7 @@ _PAGE_HTML = """
 <div id="toasts"></div>
 
 <div id="gate" class="gate" style="display:none">
-  <div class="logo">🐉</div>
+  <div class="logo hasimg"><img src="/gm-logo.png" alt="Gang Manager"></div>
   <h2 id="gateTitle">Sign in</h2>
   <p id="gateText" class="muted">Log in with Discord to manage the roster.</p>
   <div id="gateActions"></div>
@@ -4045,7 +4095,7 @@ function gate(icon,title,text,actions,wide){
   show("app",false);show("gate",true);$("logoutBtn").style.display="none";var hi=$("headerInvite");if(hi)hi.style.display="none";
   if(window.__recheck){clearInterval(window.__recheck);window.__recheck=null;}
   window.__picker=false;
-  const logo=BRAND.icon?`<img class="glogo" src="${h(BRAND.icon)}" alt="">`:`<span class="gemoji">${icon||"🐉"}</span>`;
+  const logo=`<img class="glogo" src="${h(BRAND.icon||GM_LOGO)}" alt="Gang Manager">`;
   const badge=(BRAND.icon&&icon)?`<span class="gbadge">${icon}</span>`:"";
   $("gate").innerHTML=`<div class="gatecard${wide?" wide":""}"><div class="gicon">${logo}${badge}</div><h2>${h(title)}</h2><p class="muted">${h(text)}</p><div id="gateActions">${actions||""}</div></div>`;
 }

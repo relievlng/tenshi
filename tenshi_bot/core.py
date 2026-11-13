@@ -276,11 +276,24 @@ def _brand(
     text = footer or existing
     text = f"{text} · {guild.name}" if text else guild.name
     text = f"{text} · made by pmxl"
-    if guild.icon:
-        embed.set_footer(text=text[:2048], icon_url=guild.icon.url)
+    site = _site_url()
+    icon = f"{site}/gm-icon.png" if site else (guild.icon.url if guild.icon else None)
+    if icon:
+        embed.set_footer(text=text[:2048], icon_url=icon)
     else:
         embed.set_footer(text=text[:2048])
     return embed
+
+
+def _site_url() -> str:
+    """The website's public URL (PUBLIC_URL / WEB_URL, else Railway's own
+    domain). Used to show the GM logo on the bot's embeds."""
+    base = (os.getenv("PUBLIC_URL") or os.getenv("WEB_URL") or "").strip()
+    if not base:
+        dom = (os.getenv("RAILWAY_PUBLIC_DOMAIN") or "").strip()
+        if dom:
+            base = dom if dom.startswith("http") else f"https://{dom}"
+    return base.rstrip("/")
 
 
 def _embed_container(embed: discord.Embed) -> "discord.ui.Container":
