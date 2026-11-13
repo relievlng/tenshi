@@ -2239,7 +2239,7 @@ footer a{color:var(--silver)}
   <h1>Run your gang<br><span class=g>like a machine.</span></h1>
   <p class=lead>Roster, KOS, strikes, wars, tickets and recruitment — one Discord bot with a full web control panel. Add it, subscribe, and command everything from the browser.</p>
   <div class=cta>
-    <a id="heroInvite" class="btn primary" href="/invite">➕ Add to Discord</a>
+    <a id="heroCta" class="btn primary" href="/login">Get started</a>
     <a class="btn" href="#pricing">See pricing</a>
   </div>
   <div class=trust id="heroStatus">Log in with Discord · $7.99 / month · 1 server per subscription</div>
@@ -2290,7 +2290,6 @@ footer a{color:var(--silver)}
       <li><span class=c>✓</span> 1 Discord server · cancel anytime</li>
     </ul>
     <a id="buyBtn" class="btn primary" style="width:100%" href="/login">Log in to start</a>
-    <a id="inviteBtn2" class="btn" style="width:100%;margin-top:10px" href="/invite">➕ Add to Discord</a>
   </div>
 </section>
 
@@ -2310,8 +2309,7 @@ footer a{color:var(--silver)}
     <h2 style="margin-bottom:10px">Ready to take over the city?</h2>
     <p class=sub style="margin-bottom:24px">Add Gang Manager and subscribe to unlock everything.</p>
     <div class=cta>
-      <a id="inviteBtn3" class="btn primary" href="/invite">➕ Add to Discord</a>
-      <a id="panelBtn" class="btn" href="/login">Open the panel</a>
+      <a id="panelBtn" class="btn primary" href="/login">Open the panel</a>
     </div>
   </div>
 </section>
@@ -3249,6 +3247,7 @@ _PAGE_HTML = """
 <header>
   <div class="logo" id="brandLogo">🐉</div>
   <div class="brand">GANG MANAGER<small id="sub">Admin Panel</small></div>
+  <a id="headerInvite" href="/invite" style="display:none"><button class="ghost">➕ Add to a server</button></a>
   <a id="logoutBtn" href="/logout" style="display:none"><button class="ghost">Log out</button></a>
 </header>
 
@@ -3327,7 +3326,7 @@ function applyBrand(b){
   try{document.title=(BRAND.name||"Gang Manager")+" · Admin";}catch(e){}
 }
 function gate(icon,title,text,actions){
-  show("app",false);show("gate",true);$("logoutBtn").style.display="none";
+  show("app",false);show("gate",true);$("logoutBtn").style.display="none";var hi=$("headerInvite");if(hi)hi.style.display="none";
   if(window.__recheck){clearInterval(window.__recheck);window.__recheck=null;}
   const logo=BRAND.icon?`<img class="glogo" src="${h(BRAND.icon)}" alt="">`:`<span class="gemoji">${icon||"🐉"}</span>`;
   const badge=(BRAND.icon&&icon)?`<span class="gbadge">${icon}</span>`:"";
@@ -3359,6 +3358,7 @@ async function boot(){
   var defSub=STATE.subs[def];
   if(defSub&&defSub.billing_enabled&&!defSub.active){ STATE.guild=def; showSubGate(def); return; }
   show("gate",false);show("app",true);$("logoutBtn").style.display="";
+  var hib=$("headerInvite");if(hib)hib.style.display="";
   if(window.__recheck)clearInterval(window.__recheck);
   window.__recheck=setInterval(checkAccess,8000);
   const sel=$("guildSel");

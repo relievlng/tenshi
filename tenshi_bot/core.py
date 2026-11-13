@@ -36,9 +36,10 @@ _allowed_raw = os.getenv("ALLOWED_GUILD_IDS", "").replace(" ", "")
 ALLOWED_GUILD_IDS = {int(x) for x in _allowed_raw.split(",") if x.isdigit()}
 
 # ---- Subscription / billing ------------------------------------------------- #
-# When BILLING_ENABLED is off (default), every server is treated as active, so
-# existing installs are never locked out. Flip it on to require a subscription.
-BILLING_ENABLED = os.getenv("BILLING_ENABLED", "").lower() in ("1", "true", "yes", "on")
+# Subscription is REQUIRED by default: a server must subscribe before the bot's
+# paid features (and the web panel) work. Set BILLING_ENABLED=false to turn the
+# paywall off and treat every server as active.
+BILLING_ENABLED = os.getenv("BILLING_ENABLED", "true").lower() in ("1", "true", "yes", "on")
 # Bot operator(s) — comma-separated Discord user IDs. They bypass the gate and
 # can grant/extend subscriptions manually with /subscription grant.
 _owner_raw = os.getenv("BOT_OWNER_IDS", "").replace(" ", "")
