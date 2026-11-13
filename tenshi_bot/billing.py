@@ -36,6 +36,7 @@ __all__ = [
     "grant",
     "start_trial",
     "expire",
+    "move_subscription",
     "is_owner",
     "detect_app_owners",
     "guild_for_sub",
@@ -288,6 +289,55 @@ def expire(guild_id: int) -> dict:
     save_data(DATA)
     log.info("subscription expired guild=%s", guild_id)
     return effective_state(guild_id)
+
+
+def move_subscription(from_guild_id, to_guild_id) -> "dict | None":
+    """Move an active subscription from one server to another — no new charge.
+
+    Copies the Stripe linkage (sub_id / customer_id), plan, purchaser and the
+    paid-through date (or lifetime flag) onto ``to_guild_id``, then releases
+    ``from_guild_id`` and unlinks its Stripe ids so a replayed renewal can never
+    re-activate the old server. Returns the destination's new state, or ``None``
+    if the source isn't actually active or the two ids are the same.
+
+    The caller is responsible for repointing the Stripe subscription's
+    ``metadata.guild_id`` at the destination (so future invoices follow it).
+    """
+    try:
+        src_gid, dst_gid = int(from_guild_id), int(to_guild_id)
+    except (TypeError, ValueError):
+        return None
+    if src_gid == dst_gid:
+        return None
+    if not subscription_state(src_gid)["active"]:
+        return None
+
+    src = get_subscription(guild_store(DATA, src_gid))
+    lifetime = src.get("expires_at") is None
+    until = _parse_dt(src.get("expires_at"))
+    plan = src.get("plan") or DEFAULT_PLAN
+    customer_id = src.get("customer_id")
+    sub_id = src.get("sub_id")
+    purchaser_id = src.get("purchaser_id")
+
+    grant(
+        dst_gid,
+        until=None if lifetime else until,
+        lifetime=lifetime,
+        plan=plan,
+        status="active",
+        customer_id=customer_id,
+        sub_id=sub_id,
+        purchaser_id=purchaser_id,
+    )
+    expire(src_gid)
+    # The old server no longer carries this Stripe subscription.
+    src["sub_id"] = None
+    src["customer_id"] = None
+    src["updated_at"] = _now().isoformat()
+    save_data(DATA)
+    log.info("subscription moved guild=%s -> guild=%s (sub=%s)", src_gid, dst_gid, sub_id)
+    return effective_state(dst_gid)
 
 
 def guild_for_sub(sub_id, exclude_guild=None):

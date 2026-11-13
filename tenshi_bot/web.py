@@ -1167,6 +1167,30 @@ def _managed_server(uid: str, gid: str) -> dict | None:
     return None
 
 
+def _movable_sub_for(uid, exclude_gid=None) -> "dict | None":
+    """A server the user manages whose ACTIVE, paid/lifetime subscription could be
+    moved to another server. Returns {'id','name','mode'} or None. Powers the
+    'move my subscription here' option so nobody pays twice to switch servers."""
+    entry = _USER_CACHE.get(str(uid)) or {}
+    ex = str(exclude_gid) if exclude_gid is not None else None
+    for g in entry.get("guilds") or []:
+        if ex is not None and g["id"] == ex:
+            continue
+        try:
+            perms = int(g["permissions"])
+        except (TypeError, ValueError):
+            perms = 0
+        if not (g["owner"] or perms & (_PERM_ADMIN | _PERM_MANAGE_GUILD)):
+            continue
+        if not peek_active(g["id"]):
+            continue
+        st = effective_state(int(g["id"]))
+        if st["mode"] not in ("paid", "lifetime"):
+            continue  # only a real subscription is worth moving
+        return {"id": g["id"], "name": g["name"], "mode": st["mode"]}
+    return None
+
+
 # ---- panel access ----------------------------------------------------------- #
 
 async def _has_web_access(guild, uid, live: bool = False) -> bool:
@@ -1454,7 +1478,7 @@ async def _h_me(request):
         return _aioweb.json_response(
             {
                 "authed": False, "reason": "no_access", "brand": brand, "public": cfg,
-                "user": profile, "servers": servers,
+                "user": profile, "servers": servers, "move_from": _movable_sub_for(uid),
             }
         )
     return _aioweb.json_response(
@@ -1464,6 +1488,7 @@ async def _h_me(request):
             "public": cfg,
             "user": {**profile, "owner": is_owner(uid)},
             "servers": servers,
+            "move_from": _movable_sub_for(uid),
             "guilds": [
                 {
                     "id": str(g.id),
@@ -2925,7 +2950,7 @@ h1 .g{background-size:200% 100%;animation:sheen 6s ease-in-out infinite}
   <div class="kicker rev">Questions</div>
   <h2 class=rev>Good to know</h2>
   <div class="faq rev" style="margin-top:28px">
-    <details><summary>Can I use one subscription on multiple servers?</summary><p>No — each subscription covers one server. To run Gang Manager in another server, add it there and start a separate subscription for it.</p></details>
+    <details><summary>Can I move my subscription to another server?</summary><p>Yes — for free. In the panel, pick the new server and choose <b>Move my subscription here</b>; it switches over and the old server turns off. Each subscription covers one server at a time, so to run two servers at once you'd start a second subscription.</p></details>
     <details><summary>How much does it cost?</summary><p>$7.99 a month per Discord server. Subscribe for your server, add the bot, and everything unlocks. Cancel anytime.</p></details>
     <details><summary>Do I need to host anything?</summary><p>No. Gang Manager is fully hosted and online 24/7. Add it from this site and it just works.</p></details>
     <details><summary>Can I cancel?</summary><p>Anytime. Your access stays active until the end of the period you've paid for.</p></details>
@@ -3175,6 +3200,66 @@ async def _h_sub_check(request):
     if not gid.isdigit():
         return _aioweb.json_response({"active": False})
     return _aioweb.json_response({"active": peek_active(gid), "bot_in": bot.get_guild(int(gid)) is not None})
+
+
+async def _h_sub_move(request):
+    """Move the user's active subscription onto another server they manage — no
+    new charge. Releases the old server and repoints the live Stripe sub so
+    renewals follow it. The panel offers this instead of paying twice."""
+    uid = _read_session(request.cookies.get(_COOKIE))
+    if not uid:
+        return _aioweb.json_response({"ok": False, "error": "login"}, status=401)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    to_gid = str(body.get("guild") or "").strip()
+    if not to_gid.isdigit():
+        return _aioweb.json_response({"ok": False, "error": "Pick a server to move it to."}, status=400)
+
+    # The user must manage the destination (owner / panel access, or their own
+    # server the bot hasn't joined yet).
+    dest = bot.get_guild(int(to_gid))
+    if dest is not None:
+        if not await _has_web_access(dest, uid):
+            return _aioweb.json_response({"ok": False, "error": "You don't manage that server."}, status=403)
+    elif _managed_server(uid, to_gid) is None:
+        if _USER_CACHE.get(str(uid)) is None:
+            return _aioweb.json_response({"ok": False, "error": "login"}, status=401)
+        return _aioweb.json_response({"ok": False, "error": "You can only move it to a server you manage."}, status=403)
+
+    if peek_active(to_gid):
+        return _aioweb.json_response({"ok": False, "error": "That server already has a subscription."}, status=400)
+
+    src = _movable_sub_for(uid, exclude_gid=to_gid)
+    if not src:
+        return _aioweb.json_response({"ok": False, "error": "You don't have a subscription to move."}, status=400)
+
+    from_gid = src["id"]
+    sub_id = effective_state(int(from_gid)).get("sub_id")  # capture before the move unlinks it
+    state = move_subscription(from_gid, to_gid)
+    if state is None:
+        return _aioweb.json_response(
+            {"ok": False, "error": "Couldn't move it — the subscription may have just lapsed."}, status=400
+        )
+
+    # Repoint the live Stripe subscription at the new server so its next invoice
+    # renews the right one (best-effort — the move already succeeded in our data).
+    if sub_id and _stripe_ready():
+        try:
+            await _stripe_post(f"subscriptions/{sub_id}", [("metadata[guild_id]", str(to_gid))])
+        except Exception as exc:  # noqa: BLE001
+            log.warning("sub move: couldn't repoint Stripe metadata for %s: %s", sub_id, exc)
+
+    log.info("subscription moved via panel: %s -> %s by user %s", from_gid, to_gid, uid)
+    return _aioweb.json_response(
+        {
+            "ok": True,
+            "moved_from": src["name"],
+            "bot_in": dest is not None,
+            "subscription": _sub_public(int(to_gid)),
+        }
+    )
 
 
 async def _h_billing_success(request):
@@ -3661,6 +3746,7 @@ async def start_web_server() -> None:
             _aioweb.get("/billing/success", _h_billing_success),
             _aioweb.get("/billing/portal", _h_billing_portal),
             _aioweb.get("/api/sub_check", _h_sub_check),
+            _aioweb.post("/api/sub_move", _h_sub_move),
             _aioweb.post("/billing/webhook", _h_billing_webhook),
             _aioweb.get("/login", _h_login),
             _aioweb.get("/callback", _h_callback),
@@ -4091,6 +4177,14 @@ _PAGE_HTML = """
     border:none;border-radius:14px;font-weight:800;font-size:15px;color:#09090c;
     background:linear-gradient(90deg,#c9c9d2,#ffffff);box-shadow:0 10px 30px rgba(220,220,235,.22)}
   .paybtn:hover{filter:brightness(1.04);box-shadow:0 14px 40px rgba(220,220,235,.32)}
+  .movebtn{display:inline-flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:12px;margin-top:10px;
+    border:1px solid rgba(201,201,210,.45);border-radius:14px;font-weight:800;font-size:14.5px;color:#eef0f6;
+    background:linear-gradient(180deg,rgba(201,201,210,.16),rgba(201,201,210,.05));cursor:pointer;transition:border-color .15s,background .15s}
+  .movebtn:hover{border-color:rgba(201,201,210,.9);background:linear-gradient(180deg,rgba(201,201,210,.26),rgba(201,201,210,.1))}
+  .movehint{margin-top:8px;font-size:12.5px;line-height:1.5;color:var(--mute);text-align:center}
+  .movehint b{color:#eef0f6;font-weight:700}
+  .addbtn.alt{background:linear-gradient(180deg,rgba(201,201,210,.16),rgba(201,201,210,.05));color:#eef0f6;border:1px solid rgba(201,201,210,.4)}
+  .addbtn.alt:hover{background:linear-gradient(180deg,rgba(201,201,210,.26),rgba(201,201,210,.1))}
   .whoami{display:inline-flex;align-items:center;gap:8px;margin-top:4px;font-size:13px;color:var(--mute)}
   .whoami img{width:22px;height:22px;border-radius:50%}
   .gaterow button{width:auto!important;margin-top:0!important}
@@ -4259,7 +4353,10 @@ function showPicker(me,fromApp){
     if(s.bot_in&&s.access){status=`<span class="srvtag">Active here</span>You manage Gang Manager in this server.`;action=`<button class="addbtn" onclick="openGuild('${h(s.id)}')">Open</button>`;}
     else if(s.bot_in){status=`<span class="srvtag">Uses Gang Manager</span>Ask the server owner to add you in Settings → Website access.`;}
     else if(s.can_invite){status=`<span class="srvtag">Subscribed</span>Ready — add the bot to switch everything on.`;action=`<a href="/invite?guild=${h(s.id)}" target="_blank" rel="noopener"><button class="addbtn">➕ Add bot</button></a>`;}
-    else if(s.can_add){status=`Step 1: subscribe (${h(price)}) · Step 2: add the bot`;action=`<a href="/billing/checkout?guild=${h(s.id)}"><button class="addbtn">💳 Subscribe</button></a>`;}
+    else if(s.can_add){
+      if(STATE.moveFrom&&STATE.moveFrom.id!==s.id){status=`Move your sub from <b>${h(STATE.moveFrom.name)}</b>, or start a new one`;action=`<button class="addbtn" onclick="moveSub('${h(s.id)}')">🔄 Move sub here</button><a href="/billing/checkout?guild=${h(s.id)}"><button class="addbtn alt">💳 New sub</button></a>`;}
+      else{status=`Step 1: subscribe (${h(price)}) · Step 2: add the bot`;action=`<a href="/billing/checkout?guild=${h(s.id)}"><button class="addbtn">💳 Subscribe</button></a>`;}
+    }
     else{status="Runs Gang Manager";}
     return `<div class="srv"><div class="srvic">${srvIcon(s)}</div><div class="srvmeta"><b>${h(s.name)}</b><small>${status}</small></div>${action}</div>`;
   }).join("");
@@ -4276,6 +4373,16 @@ function openPicker(){
   else location.href="/login";  // server list expired — log in again to load it
 }
 function openGuild(id){STATE.prefGuild=id;boot();}
+async function moveSub(gid){
+  var mf=STATE.moveFrom; if(!mf||mf.id===gid) return;
+  if(!confirm("Move your subscription from "+mf.name+" to this server?\n\n"+mf.name+" will stop using Gang Manager — you can move it back any time."))return;
+  try{
+    var r=await post("/api/sub_move",{guild:gid});
+    toast(r.moved_from?("Moved from "+r.moved_from+" ✓"):"Subscription moved ✓","ok");
+    STATE.moveFrom=null;
+    if(r.bot_in){openGuild(gid);} else {location.href="/invite?guild="+encodeURIComponent(gid);}
+  }catch(e){ if(e.status===401) return boot(); toast(e.message||"Couldn't move the subscription.","err"); }
+}
 function showSubGate(gid){
   var s=STATE.subs[gid]||{};
   var name=(STATE.guildNames||{})[gid]||"this server";
@@ -4283,16 +4390,21 @@ function showSubGate(gid){
   var expired=s.status==="expired";
   var multi=Object.keys(STATE.subs||{}).length>1?`<button class="ghost" onclick="boot()">↻ Other server</button>`:"";
   var feats=["Roster, KOS, strikes & wars","Tickets & orders with transcripts","EOI recruitment with voting","This web panel & live logs"].map(function(f){return `<li><span>✓</span>${h(f)}</li>`;}).join("");
+  var mf=STATE.moveFrom;
+  var move=(mf&&mf.id!==gid)?
+    `<button class="movebtn" onclick="moveSub('${h(gid)}')">🔄 Move my subscription here</button>`+
+    `<div class="movehint">You're already subscribed on <b>${h(mf.name)}</b>. Move it here for free instead of paying again — that server switches off.</div>`:"";
   gate("🔒",expired?"Subscription expired":"Activate "+name,
     expired?name+"'s subscription has ended. Renew to switch everything back on.":"One subscription unlocks every feature for "+name+".",
     `<div class="plan"><div class="planprice">${h(price.split(" /")[0])}<small> / month</small></div><ul>${feats}</ul></div>`+
     `<a href="/billing/checkout?guild=${encodeURIComponent(gid)}"><button class="paybtn">💳 ${expired?"Renew":"Subscribe"} — ${h(price)}</button></a>`+
+    move+
     `<div class="gaterow">${multi}<a href="/logout"><button class="ghost">Log out</button></a></div>`,true);
 }
 async function boot(){
   let me;try{me=await api("/api/me");}catch(e){gate("⚠️","Can't connect","Couldn't reach the server — try again.","<button onclick='boot()'>Retry</button>");return;}
   applyBrand(me.brand);
-  STATE.pub=me.public||{};STATE.owner=!!(me.user&&me.user.owner);STATE.me=me;
+  STATE.pub=me.public||{};STATE.owner=!!(me.user&&me.user.owner);STATE.me=me;STATE.moveFrom=me.move_from||null;
   STATE.subs={};STATE.canSetup={};STATE.guildNames={};
   (me.guilds||[]).forEach(x=>{STATE.subs[x.id]=x.subscription||null;STATE.canSetup[x.id]=!!x.can_setup;STATE.guildNames[x.id]=x.name;});
   renderUser(me.user);

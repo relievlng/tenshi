@@ -200,6 +200,11 @@ Gang Manager runs as a paid product that other servers add themselves.
   Without one, slash commands (except `/subscription`, `/settings`,
   `/gang_help`), every button and menu, welcome/join messages, the EOI timer and
   ticket auto-close all pause in that server, and the web panel shows Subscribe.
+- **Move a subscription between servers (free).** In the panel, pick another
+  server you manage and choose **🔄 Move my subscription here** (also shown on the
+  subscribe screen and in the server picker). The subscription — and its live
+  Stripe billing — switches to the new server and the old one turns off; no second
+  charge. To run two servers at once, start a second subscription instead.
 - **Settings → Subscription** shows the status and paid-until date, **Subscribe**
   or **Manage billing** (Stripe's portal: update the card, invoices, cancel), and
   for you, owner tools: **+30 days**, **Lifetime**, **Expire**, **Sync Stripe**.
