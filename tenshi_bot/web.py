@@ -4835,7 +4835,6 @@ async function renderSettings(){
   }
   const roles=s.items.filter(i=>i.kind==="role"),mainc=s.items.filter(i=>i.kind==="channel"&&!i.is_log),logs=s.items.filter(i=>i.is_log);
   const webOn=s.web_enabled!==false;
-  const invite=`<button class="ghost" onclick="openPicker()">➕ Add to another server</button>`;
   const wa=s.web_access||{allowed:[],candidates:[]};
   const chips=(wa.allowed||[]).length
     ? (wa.allowed||[]).map(function(m){return `<span class="wmchip">@${h(m.name)}<button class="x" title="Remove" onclick="removeWebMember('${h(m.id)}')">✕</button></span>`;}).join("")
@@ -4845,7 +4844,7 @@ async function renderSettings(){
     '<div class="card">'
       +'<div class="setuptop"><div><h3 style="margin:0">⚙️ Setup</h3>'
       +'<div class="muted" style="font-size:13px">'+pr.done+' of '+pr.total+' configured — pick a channel or role for each.</div></div>'
-      +'<div style="text-align:right">'+invite+'</div></div>'
+      +'</div>'
       +'<div class="pbar"><div class="pfill" style="width:'+pct+'%"></div></div>'
     +'</div>'
     +'<div class="card"><div class="setrow toggle"><label>🌐 Website panel</label>'
