@@ -49,16 +49,10 @@ bot.tree.interaction_check = subscription_gate
 def _status_activities() -> list[discord.BaseActivity]:
     """The presence rotation, built fresh each tick off live numbers.
 
-    Uses real activity types so Discord renders the verb — "Watching over
-    12,400 members", "Competing in 2 gang wars" — instead of a flat line.
-    Counts only subscribed servers, so figures match what members actually see.
-    Set BOT_STATUS to pin a custom line (shown verb-less) at the front.
+    Clean custom lines (no verb) so they read as one voice — "managing 12,400
+    members", "3 gang wars live". Counts only subscribed servers, so the figures
+    match what members actually see. Set BOT_STATUS to pin a line of your own.
     """
-    W = discord.ActivityType.watching
-    L = discord.ActivityType.listening
-    C = discord.ActivityType.competing
-    P = discord.ActivityType.playing
-
     active = [g for g in bot.guilds if guild_active(g.id)]
     members = sum(g.member_count or 0 for g in active)
     tickets = 0
@@ -68,22 +62,22 @@ def _status_activities() -> list[discord.BaseActivity]:
         tickets += sum(1 for o in store.get("orders", []) if o.get("status", "open") == "open")
         wars += sum(1 for w in store.get("wars", []) if w.get("active", True))
 
+    def line(text: str) -> discord.CustomActivity:
+        return discord.CustomActivity(name=text[:128])
+
     acts: list[discord.BaseActivity] = []
     custom = (os.getenv("BOT_STATUS") or "").strip()
     if custom:
-        acts.append(discord.CustomActivity(name=custom[:128]))
-    if active:
-        acts.append(discord.Activity(type=W, name=f"{len(active)} gang{'s' if len(active) != 1 else ''} 🏴"))
+        acts.append(line(custom))
     if members:
-        acts.append(discord.Activity(type=W, name=f"over {members:,} members"))
+        acts.append(line(f"👥 managing {members:,} member{'s' if members != 1 else ''}"))
+    if active:
+        acts.append(line(f"🏴 managing {len(active)} gang{'s' if len(active) != 1 else ''}"))
     if wars:
-        acts.append(discord.Activity(type=C, name=f"{wars} gang war{'s' if wars != 1 else ''} ⚔️"))
+        acts.append(line(f"⚔️ {wars} gang war{'s' if wars != 1 else ''} live"))
     if tickets:
-        acts.append(discord.Activity(type=W, name=f"{tickets} open ticket{'s' if tickets != 1 else ''} 🎫"))
-    acts.append(discord.Activity(type=L, name="/gang_help"))
-    site = _site_url()
-    host = site.split("://", 1)[-1].strip("/") if site else ""
-    acts.append(discord.Activity(type=P, name=f"Gang Manager · {host}" if host else "Gang Manager by pmxl"))
+        acts.append(line(f"🎫 {tickets} open ticket{'s' if tickets != 1 else ''}"))
+    acts.append(line("🥷 /gang_help"))
     return acts
 
 

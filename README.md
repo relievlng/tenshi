@@ -112,7 +112,7 @@ All channel/role settings live in `/settings`. Staff commands need the leadershi
 | `SUPPORT_URL` | no | — | A contact link (e.g. your Discord invite) shown when online payments aren't set up |
 | `TRIAL_DAYS` | no | `0` | Optional free-trial length in days when the bot joins a new server (0 = no trial; the default is monthly-sub only) |
 | `INVITE_PERMISSIONS` | no | sensible set | Override the permission integer on the "Add to Discord" invite link |
-| `BOT_STATUS` | no | — | A line of your own for the bot's status. It's pinned to the front of the live rotation (gangs running, members, active wars, open tickets, `/gang_help`, website), which changes every 30s |
+| `BOT_STATUS` | no | — | A line of your own for the bot's status. It's pinned to the front of the live rotation (managing N members, managing N gangs, active wars, open tickets, `/gang_help`), which changes every 30s |
 | `STRIPE_SECRET_KEY` | no | — | Stripe secret key — turns on the Subscribe button (real monthly billing) |
 | `STRIPE_PRICE_ID` | no | — | The Stripe recurring Price to sell (e.g. `price_123`) |
 | `STRIPE_WEBHOOK_SECRET` | no | — | Stripe webhook signing secret (`whsec_…`) so payments auto-activate/expire servers |
