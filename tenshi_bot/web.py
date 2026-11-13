@@ -1190,6 +1190,20 @@ async def _accessible_guilds(uid) -> list:
 
 # ---- HTTP handlers ---------------------------------------------------------- #
 
+async def _req_guild(request):
+    """The server a request is about: ?guild= on GETs, or "guild" in the JSON
+    body on the panel's POSTs (aiohttp caches the body, so handlers can still
+    read it afterwards)."""
+    gid = request.query.get("guild")
+    if not gid and request.method == "POST" and request.can_read_body:
+        try:
+            body = await request.json()
+            gid = str(body.get("guild") or "") if isinstance(body, dict) else ""
+        except Exception:
+            gid = ""
+    return _guild_from(gid or None)
+
+
 def _guild_from(gid: str | None):
     if not gid:
         return bot.guilds[0] if len(bot.guilds) == 1 else None
@@ -1386,7 +1400,7 @@ async def _h_access(request):
     uid = _read_session(request.cookies.get(_COOKIE))
     if not uid:
         return _aioweb.json_response({"ok": False})
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is not None:
         return _aioweb.json_response({"ok": await _has_web_access(guild, uid, live=True)})
     # no specific guild — allowed if still in any accessible guild
@@ -1571,7 +1585,7 @@ async def _setup_gate(request, guild) -> tuple[bool, int, str]:
 
 
 async def _h_roster(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _gate(request, guild)
@@ -1589,7 +1603,7 @@ async def _h_roster(request):
 
 
 async def _h_overview(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _gate(request, guild)
@@ -1600,7 +1614,7 @@ async def _h_overview(request):
 
 
 async def _h_kos(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _gate(request, guild)
@@ -1676,7 +1690,7 @@ async def _h_remove(request):
 
 
 async def _h_stash(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _gate(request, guild)
@@ -1748,7 +1762,7 @@ async def _h_stash_remove(request):
 
 
 async def _h_stash_scan(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _gate(request, guild)
@@ -1785,7 +1799,7 @@ async def _h_stash_scan(request):
 
 
 async def _h_wars(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _gate(request, guild)
@@ -1796,7 +1810,7 @@ async def _h_wars(request):
 
 
 async def _h_orders(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _gate(request, guild)
@@ -2062,7 +2076,7 @@ async def _h_ticket_type_remove(request):
 
 
 async def _h_strikes(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _gate(request, guild)
@@ -2135,7 +2149,7 @@ async def _h_strike_clear(request):
 
 
 async def _h_eois(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _gate(request, guild)
@@ -2959,7 +2973,7 @@ async def _h_billing_webhook(request):
 async def _h_web_toggle(request):
     """Turn this server's website panel on or off. Reachable even while off so
     staff can switch it back on."""
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _setup_gate(request, guild)
@@ -3027,7 +3041,7 @@ def _settings_list(guild: "discord.Guild", store: dict) -> dict:
 async def _h_sub_admin(request):
     """Bot-owner subscription controls from the panel: comp 30 days, lifetime,
     expire, or re-sync everything from Stripe."""
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     uid = _read_session(request.cookies.get(_COOKIE))
@@ -3090,7 +3104,7 @@ def _web_members_list(guild: "discord.Guild", store: dict) -> dict:
 
 async def _h_logs_setup(request):
     """Create the Logs category + a channel per log type, from the website."""
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _setup_gate(request, guild)
@@ -3118,7 +3132,7 @@ async def _h_logs_setup(request):
 
 
 async def _h_web_member_add(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _setup_gate(request, guild)
@@ -3151,7 +3165,7 @@ async def _h_web_member_add(request):
 
 
 async def _h_web_member_remove(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _setup_gate(request, guild)
@@ -3177,7 +3191,7 @@ async def _h_web_member_remove(request):
 
 
 async def _h_settings(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _setup_gate(request, guild)
@@ -3188,7 +3202,7 @@ async def _h_settings(request):
 
 
 async def _h_setting_set(request):
-    guild = _guild_from(request.query.get("guild"))
+    guild = await _req_guild(request)
     if guild is None:
         return _aioweb.json_response({"error": "Guild not found."}, status=404)
     ok, code, msg = await _setup_gate(request, guild)
@@ -3677,13 +3691,83 @@ _PAGE_HTML = """
   .gate .gicon::before{display:none}
   .gate .gicon .glogo{width:auto;max-width:260px;height:auto;border-radius:10px;object-fit:contain;border:none;filter:drop-shadow(0 8px 30px rgba(255,255,255,.18))}
   .gate .gicon .gbadge{right:-6px;bottom:-6px}
+  /* ---- Settings cards ---- */
+  #settingsView .card{position:relative;background:rgba(14,14,20,.62);border:1px solid var(--line);border-radius:18px;
+    padding:18px 18px 16px;margin-bottom:14px;backdrop-filter:blur(10px);box-shadow:0 14px 40px rgba(0,0,0,.28);
+    animation:cardin .4s cubic-bezier(.2,.7,.2,1) both}
+  #settingsView .card:nth-child(2){animation-delay:.04s}#settingsView .card:nth-child(3){animation-delay:.08s}
+  #settingsView .card:nth-child(4){animation-delay:.12s}#settingsView .card:nth-child(5){animation-delay:.16s}
+  #settingsView .card:nth-child(n+6){animation-delay:.2s}
+  @keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  #settingsView .card h4{font-size:15px;margin:0 0 10px}
+  .paybtn{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:13px;margin-top:4px;
+    border:none;border-radius:14px;font-weight:800;font-size:15px;color:#09090c;
+    background:linear-gradient(90deg,#c9c9d2,#ffffff);box-shadow:0 10px 30px rgba(220,220,235,.22)}
+  .paybtn:hover{filter:brightness(1.04);box-shadow:0 14px 40px rgba(220,220,235,.32)}
+  .whoami{display:inline-flex;align-items:center;gap:8px;margin-top:4px;font-size:13px;color:var(--mute)}
+  .whoami img{width:22px;height:22px;border-radius:50%}
+  .gaterow button{width:auto!important;margin-top:0!important}
+  /* ---- living background ---- */
+  .aura{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+  .aura i{position:absolute;border-radius:50%;filter:blur(80px);opacity:.38;animation:aurafloat 22s ease-in-out infinite}
+  .aura i:nth-child(1){width:52vw;height:52vw;left:-12vw;top:-18vw;background:radial-gradient(circle,#5a5a66,transparent 65%)}
+  .aura i:nth-child(2){width:44vw;height:44vw;right:-10vw;top:22vh;background:radial-gradient(circle,#8a8a98,transparent 65%);animation-delay:-7s}
+  .aura i:nth-child(3){width:60vw;height:60vw;left:20vw;bottom:-30vw;background:radial-gradient(circle,#2e2e38,transparent 65%);animation-delay:-13s}
+  @keyframes aurafloat{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(4vw,3vh) scale(1.08)}}
+  @media(prefers-reduced-motion:reduce){.aura i{animation:none}}
+  /* ---- account chip ---- */
+  .userchip{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:999px;border:1px solid var(--line);
+    background:rgba(255,255,255,.05);font-size:13px;font-weight:650;max-width:280px}
+  .userchip img{width:28px;height:28px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.14)}
+  .userchip #userName{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .opbadge{font-size:9.5px;font-weight:800;letter-spacing:.8px;padding:3px 7px;border-radius:6px;white-space:nowrap;
+    background:linear-gradient(90deg,#c9c9d2,#fff);color:#09090c}
+  @media(max-width:700px){.userchip #userName,.opbadge{display:none!important}.userchip{padding:4px}
+    #headerInvite button{padding:8px 10px;font-size:12px}}
+  /* ---- wide gate: server picker + subscribe ---- */
+  .gatecard.wide{max-width:520px}
+  .gaterow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+  .srvlist{display:flex;flex-direction:column;gap:10px;margin:20px 0 6px;text-align:left;max-height:46vh;overflow:auto;padding:2px}
+  .srv{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;border:1px solid var(--line);
+    background:rgba(255,255,255,.04);transition:.18s}
+  .srv:hover{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.07);transform:translateY(-1px)}
+  .srvic{width:44px;height:44px;border-radius:14px;flex:none;overflow:hidden;display:grid;place-items:center;
+    background:linear-gradient(135deg,#2a2a33,#15151b);font-weight:800;font-size:18px;color:#e8e8ee}
+  .srvic img{width:100%;height:100%;object-fit:cover}
+  .srvmeta{flex:1;min-width:0}
+  .srvmeta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .srvmeta small{display:block;color:var(--mute);font-size:12.5px;line-height:1.45;margin-top:2px}
+  .srvtag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:6px;
+    background:rgba(34,197,94,.16);color:#9fe3b4;margin-right:6px}
+  .addbtn{white-space:nowrap;font-weight:700;background:linear-gradient(90deg,#c9c9d2,#fff);color:#09090c;border:none}
+  .addbtn:hover{background:linear-gradient(90deg,#dcdce4,#fff)}
+  .srvempty{padding:18px;border-radius:14px;border:1px dashed var(--line);color:var(--mute);text-align:center;font-size:14px}
+  .plan{margin:20px 0 16px;padding:18px 18px 8px;border-radius:18px;text-align:left;border:1px solid rgba(255,255,255,.16);
+    background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.02))}
+  .planprice{font-size:40px;font-weight:850;letter-spacing:-1px;line-height:1}
+  .planprice small{font-size:15px;font-weight:600;color:var(--mute);letter-spacing:0}
+  .plan ul{list-style:none;margin:14px 0 6px;padding:0}
+  .plan li{padding:7px 0;border-top:1px solid rgba(255,255,255,.06);font-size:14px;display:flex;gap:10px}
+  .plan li span{color:#8ad18a;font-weight:800}
+  /* ---- subscription card (Settings) ---- */
+  .subcard{border-color:rgba(255,255,255,.2)!important;background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.015))!important}
+  .subhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .spill{font-size:12px;font-weight:800;padding:5px 11px;border-radius:999px;white-space:nowrap;letter-spacing:.3px}
+  .spill.ok{background:rgba(34,197,94,.16);color:#9fe3b4;border:1px solid rgba(34,197,94,.35)}
+  .spill.bad{background:rgba(239,68,68,.14);color:#f5a3a3;border:1px solid rgba(239,68,68,.35)}
+  .subacts{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .opctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.12)}
+  .opctl span{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--mute);margin-right:4px}
+  .opctl button{padding:7px 12px;font-size:13px}
 </style>
 </head>
 <body>
+<div class="aura"><i></i><i></i><i></i></div>
 <header>
   <div class="logo" id="brandLogo">🐉</div>
   <div class="brand">GANG MANAGER<small id="sub">Admin Panel</small></div>
-  <a id="headerInvite" href="/invite" style="display:none"><button class="ghost">➕ Add to a server</button></a>
+  <div id="userChip" class="userchip" style="display:none"><img id="userAv" alt=""><span id="userName"></span><span id="opBadge" class="opbadge" style="display:none">BOT OWNER</span></div>
+  <a id="headerInvite" href="/invite" target="_blank" rel="noopener" style="display:none"><button class="ghost">➕ Add to a server</button></a>
   <a id="logoutBtn" href="/logout" style="display:none"><button class="ghost">Log out</button></a>
 </header>
 
@@ -3761,31 +3845,69 @@ function applyBrand(b){
   if(hl){ hl.innerHTML=`<img src="${GM_LOGO}" alt="">`; hl.classList.add("hasimg"); }
   try{document.title=(BRAND.name||"Gang Manager")+" · Admin";}catch(e){}
 }
-function gate(icon,title,text,actions){
+function gate(icon,title,text,actions,wide){
   show("app",false);show("gate",true);$("logoutBtn").style.display="none";var hi=$("headerInvite");if(hi)hi.style.display="none";
   if(window.__recheck){clearInterval(window.__recheck);window.__recheck=null;}
+  window.__picker=false;
   const logo=BRAND.icon?`<img class="glogo" src="${h(BRAND.icon)}" alt="">`:`<span class="gemoji">${icon||"🐉"}</span>`;
   const badge=(BRAND.icon&&icon)?`<span class="gbadge">${icon}</span>`:"";
-  $("gate").innerHTML=`<div class="gatecard"><div class="gicon">${logo}${badge}</div><h2>${h(title)}</h2><p class="muted">${h(text)}</p><div id="gateActions">${actions||""}</div></div>`;
+  $("gate").innerHTML=`<div class="gatecard${wide?" wide":""}"><div class="gicon">${logo}${badge}</div><h2>${h(title)}</h2><p class="muted">${h(text)}</p><div id="gateActions">${actions||""}</div></div>`;
 }
-function inviteBtn(){var u=(STATE.pub&&STATE.pub.invite_url)||"";return u?'<a href="'+h(u)+'" target="_blank" rel="noopener"><button class="ghost">➕ Add to your server</button></a>':"";}
+function inviteBtn(){return `<a href="/invite" target="_blank" rel="noopener"><button class="ghost">➕ Add to a server</button></a>`;}
+function renderUser(u){
+  var c=$("userChip");if(!c)return;
+  if(!u||!u.id){c.style.display="none";return;}
+  $("userAv").src=u.avatar||"https://cdn.discordapp.com/embed/avatars/0.png";
+  $("userName").textContent=u.name||"You";
+  $("opBadge").style.display=u.owner?"":"none";
+  c.style.display="";
+}
+function srvIcon(s){return s.icon?`<img src="${h(s.icon)}" alt="">`:`<span>${h((s.name||"?").trim().charAt(0).toUpperCase())}</span>`;}
+function showPicker(me){
+  var list=me.servers||[];
+  var rows=list.map(function(s){
+    var status="",action="";
+    if(s.bot_in&&!s.access){status=`<span class="srvtag">Uses Gang Manager</span>Ask the server owner to add you in Settings → Website access.`;}
+    else if(s.can_add){status=s.owner?"You own this server":"You can manage this server";action=`<a href="/invite?guild=${h(s.id)}" target="_blank" rel="noopener"><button class="addbtn">➕ Add bot</button></a>`;}
+    else{status="Runs Gang Manager";}
+    return `<div class="srv"><div class="srvic">${srvIcon(s)}</div><div class="srvmeta"><b>${h(s.name)}</b><small>${status}</small></div>${action}</div>`;
+  }).join("");
+  var empty=`<div class="srvempty">No servers to show yet. Create a Discord server (or ask a server owner to add you), then refresh.</div>`;
+  var u=me.user||{};
+  var who=u.name?`<div class="whoami"><img src="${h(u.avatar||"")}" alt="">Logged in as <b>${h(u.name)}</b></div>`:"";
+  gate("➕","Pick a server","Add Gang Manager to one of your servers. Once it joins, subscribe here to switch everything on.",
+    `${who}<div class="srvlist">${rows||empty}</div><div class="gaterow"><button onclick="boot()">↻ Refresh</button><a href="/logout"><button class="ghost">Log out</button></a></div>`,true);
+  window.__picker=true;
+}
 function showSubGate(gid){
   var s=STATE.subs[gid]||{};
-  var cl=(STATE.pub&&STATE.pub.stripe)?("/billing/checkout?guild="+encodeURIComponent(gid)):"/pricing";
-  var multi=Object.keys(STATE.subs||{}).length>1?'<button onclick="boot()">↻ Back</button>':"";
-  gate("🔒","Subscription needed","This server's subscription has "+(s.status==="expired"?"expired":"not started")+". Subscribe to unlock the panel and the bot's features.",
-    '<a href="'+cl+'"><button class="discordbtn">💳 Subscribe</button></a>'+inviteBtn()+multi+'<a href="/logout"><button>Log out</button></a>');
+  var name=(STATE.guildNames||{})[gid]||"this server";
+  var price=((STATE.pub||{}).plan||{}).price||"$7.99 / month";
+  var expired=s.status==="expired";
+  var multi=Object.keys(STATE.subs||{}).length>1?`<button class="ghost" onclick="boot()">↻ Other server</button>`:"";
+  var feats=["Roster, KOS, strikes & wars","Tickets & orders with transcripts","EOI recruitment with voting","This web panel & live logs"].map(function(f){return `<li><span>✓</span>${h(f)}</li>`;}).join("");
+  gate("🔒",expired?"Subscription expired":"Activate "+name,
+    expired?name+"'s subscription has ended. Renew to switch everything back on.":"One subscription unlocks every feature for "+name+".",
+    `<div class="plan"><div class="planprice">${h(price.split(" /")[0])}<small> / month</small></div><ul>${feats}</ul></div>`+
+    `<a href="/billing/checkout?guild=${encodeURIComponent(gid)}"><button class="paybtn">💳 ${expired?"Renew":"Subscribe"} — ${h(price)}</button></a>`+
+    `<div class="gaterow">${multi}<a href="/logout"><button class="ghost">Log out</button></a></div>`,true);
 }
 async function boot(){
   let me;try{me=await api("/api/me");}catch(e){gate("⚠️","Can't connect","Couldn't reach the server — try again.","<button onclick='boot()'>Retry</button>");return;}
   applyBrand(me.brand);
   STATE.pub=me.public||{};STATE.owner=!!(me.user&&me.user.owner);
-  STATE.subs={};STATE.canSetup={};(me.guilds||[]).forEach(x=>{STATE.subs[x.id]=x.subscription||null;STATE.canSetup[x.id]=!!x.can_setup;});
+  STATE.subs={};STATE.canSetup={};STATE.guildNames={};
+  (me.guilds||[]).forEach(x=>{STATE.subs[x.id]=x.subscription||null;STATE.canSetup[x.id]=!!x.can_setup;STATE.guildNames[x.id]=x.name;});
+  renderUser(me.user);
   if(!me.authed){
-    var pricing='<a href="/pricing"><button class="ghost">💳 Pricing</button></a>';
-    if(me.reason==="not_configured") gate("⚙️","Setup needed","The owner still needs to set DISCORD_CLIENT_SECRET before anyone can log in.",inviteBtn()+pricing);
-    else if(me.reason==="no_access") gate("➕","Add your server","You're logged in! Add Gang Manager to a server you own, then subscribe here to activate it. Already added it? Reload.",'<a href="/invite"><button class="discordbtn">➕ Add to Discord</button></a><button onclick="boot()">↻ Reload</button><a href="/logout"><button>Log out</button></a>');
-    else gate("","Gang Manager","Log in with Discord to manage the roster, stash, KOS, strikes and more.",'<a href="/login"><button class="discordbtn">'+DSVG+' Log in with Discord</button></a>'+inviteBtn()+pricing);
+    var pricing=`<a href="/#pricing"><button class="ghost">💳 Pricing</button></a>`;
+    if(me.reason==="not_configured") gate("⚙️","Setup needed","The site owner still needs to finish setting up Discord login.",pricing);
+    else if(me.reason==="no_access"){
+      if(Array.isArray(me.servers)) showPicker(me);
+      else gate("➕","Add your server","Log in again to load your servers, or add Gang Manager to a server you own.",
+        `<a href="/login"><button class="discordbtn">${DSVG} Load my servers</button></a>`+inviteBtn()+`<div class="gaterow"><button class="ghost" onclick="boot()">↻ Refresh</button><a href="/logout"><button class="ghost">Log out</button></a></div>`);
+    }
+    else gate("","Gang Manager","Log in with Discord to set up and run your gang from the browser.",`<a href="/login"><button class="discordbtn">${DSVG} Log in with Discord</button></a>`+pricing);
     return;
   }
   // pick an active server by default; fall back to the first
@@ -3808,11 +3930,12 @@ function renderSubBanner(){
   var el=$("subBanner");if(!el)return;
   var s=STATE.subs&&STATE.subs[STATE.guild];el.innerHTML="";
   if(!s||!s.billing_enabled)return;
-  var base=(STATE.pub&&STATE.pub.stripe)?("/billing/checkout?guild="+encodeURIComponent(STATE.guild)):"/pricing";
+  var g=encodeURIComponent(STATE.guild);
   if(!s.active){
-    el.innerHTML='<div class="banner bad">🔒 <b>Subscription '+(s.status==="expired"?"expired":"inactive")+'.</b> Paid features are paused in Discord. <a href="'+base+'">Subscribe now →</a></div>';
-  }else if(s.days_left!=null&&s.days_left<=5){
-    el.innerHTML='<div class="banner warn">⏳ Subscription renews in '+s.days_left+' day(s). <a href="'+base+'">Manage →</a></div>';
+    el.innerHTML=`<div class="banner bad">🔒 <b>Subscription ${s.status==="expired"?"expired":"inactive"}.</b> The bot's features are paused in Discord. <a href="/billing/checkout?guild=${g}">Subscribe →</a></div>`;
+  }else if(s.mode==="paid"&&s.days_left!=null&&s.days_left<=5){
+    var link=s.has_billing?`/billing/portal?guild=${g}`:`/billing/checkout?guild=${g}`;
+    el.innerHTML=`<div class="banner warn">⏳ Paid up for ${s.days_left} more day(s)${s.has_billing?" — renews automatically.":"."} <a href="${link}">${s.has_billing?"Manage billing →":"Subscribe →"}</a></div>`;
   }
 }
 async function checkAccess(){
@@ -3822,7 +3945,7 @@ async function checkAccess(){
   }catch(e){ if(e.status===401||e.status===403) boot(); }
 }
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&window.__recheck)checkAccess();});
-window.addEventListener("focus",()=>{if(window.__recheck)checkAccess();});
+window.addEventListener("focus",()=>{if(window.__picker)boot();else if(window.__recheck)checkAccess();});
 async function reload(){
   const sel=$("guildSel");if(sel&&sel.value)STATE.guild=sel.value;
   const g=encodeURIComponent(STATE.guild);
@@ -4158,9 +4281,9 @@ async function renderSettings(){
   const wa=s.web_access||{allowed:[],candidates:[]};
   const chips=(wa.allowed||[]).length
     ? (wa.allowed||[]).map(function(m){return `<span class="wmchip">@${h(m.name)}<button class="x" title="Remove" onclick="removeWebMember('${h(m.id)}')">✕</button></span>`;}).join("")
-    : '<div class="muted" style="font-size:13px">No extra members yet — owner &amp; admins already have access.</div>';
+    : '<div class="muted" style="font-size:13px">No extra members yet — only the server owner has access.</div>';
   const copts='<option value="">Select a member…</option>'+(wa.candidates||[]).map(function(c){return '<option value="'+h(c.id)+'">@'+h(c.name)+'</option>';}).join("");
-  el.innerHTML=
+  el.innerHTML=subCardHTML()+
     '<div class="card">'
       +'<div class="setuptop"><div><h3 style="margin:0">⚙️ Setup</h3>'
       +'<div class="muted" style="font-size:13px">'+pr.done+' of '+pr.total+' configured — pick a channel or role for each.</div></div>'
@@ -4208,6 +4331,33 @@ async function addWebMember(){
 async function removeWebMember(id){
   try{const r=await post("/api/web_member_remove",{guild:STATE.guild,user_id:id});STATE.settings=r.settings;toast("Access removed","ok");renderSettings();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
+}
+function subCardHTML(){
+  var st=STATE.settings||{},s=st.subscription||{},g=encodeURIComponent(STATE.guild);
+  var price=((STATE.pub||{}).plan||{}).price||"$7.99 / month";
+  var until=s.expires_at?new Date(s.expires_at).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}):"";
+  var pill,line,acts="";
+  if(s.mode==="owner"){pill=`<span class="spill ok">Your server</span>`;line="You own the bot, so this server is free forever.";}
+  else if(s.mode==="free"){pill=`<span class="spill ok">Free mode</span>`;line="Billing is switched off — everything is unlocked.";}
+  else if(s.mode==="lifetime"){pill=`<span class="spill ok">Lifetime</span>`;line="Lifetime access — this server never expires.";}
+  else if(s.mode==="paid"){
+    pill=`<span class="spill ok">Active</span>`;line=`Paid until <b>${h(until)}</b>${s.has_billing?" · renews automatically":""}.`;
+    acts=s.has_billing?`<a href="/billing/portal?guild=${g}"><button>💳 Manage billing</button></a>`:`<a href="/billing/checkout?guild=${g}"><button>💳 Subscribe</button></a>`;
+  }else{
+    pill=`<span class="spill bad">${s.status==="expired"?"Expired":"Not subscribed"}</span>`;line="The bot's features are paused in this server until it's subscribed.";
+    acts=`<a href="/billing/checkout?guild=${g}"><button class="brand-btn">💳 Subscribe — ${h(price)}</button></a>`;
+  }
+  var op="";
+  if(STATE.owner){
+    op=`<div class="opctl"><span>Bot owner tools</span><button onclick="subAdmin('grant30')">+30 days</button><button onclick="subAdmin('lifetime')">♾ Lifetime</button><button onclick="subAdmin('expire')">Expire</button>${st.stripe?`<button onclick="subAdmin('sync')">↻ Sync Stripe</button>`:""}</div>`;
+  }
+  return `<div class="card subcard"><div class="subhead"><div><h3 style="margin:0">💳 Subscription</h3><div class="muted" style="font-size:13px;margin-top:3px">${line}</div></div>${pill}</div>${acts?`<div class="subacts">${acts}</div>`:""}${op}</div>`;
+}
+async function subAdmin(action){
+  if(action==="expire"&&!confirm("Expire this server's subscription now?"))return;
+  try{const r=await post("/api/sub_admin",{guild:STATE.guild,action:action});toast(r.message||"Done","ok");
+    STATE.subs[STATE.guild]=r.subscription;STATE.settings=null;renderSubBanner();renderSettings();}
+  catch(e){if(e.status===401)return boot();toast(e.message||"Failed","err");}
 }
 async function logsSetup(){
   if(!confirm("Create a Logs category with a channel for every log type?"))return;
