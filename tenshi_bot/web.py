@@ -4268,7 +4268,7 @@ _PAGE_HTML = """
   <div class="brand">GANG MANAGER<small id="sub">Admin Panel</small></div>
   <div id="userChip" class="userchip" style="display:none"><img id="userAv" alt=""><span id="userName"></span><span id="opBadge" class="opbadge" style="display:none">BOT OWNER</span></div>
   <a id="headerInvite" href="#servers" onclick="openPicker();return false;" style="display:none"><button class="ghost">➕ Add to a server</button></a>
-  <a id="logoutBtn" href="/logout" style="display:none"><button class="ghost">Log out</button></a>
+  <a id="logoutBtn" href="/logout"><button class="ghost">Log out</button></a>
 </header>
 
 <div id="toasts"></div>
@@ -4346,7 +4346,7 @@ function applyBrand(b){
   try{document.title=(BRAND.name||"Gang Manager")+" · Admin";}catch(e){}
 }
 function gate(icon,title,text,actions,wide){
-  show("app",false);show("gate",true);$("logoutBtn").style.display="none";var hi=$("headerInvite");if(hi)hi.style.display="none";
+  show("app",false);show("gate",true);$("logoutBtn").style.display="";var hi=$("headerInvite");if(hi)hi.style.display="none";
   if(window.__recheck){clearInterval(window.__recheck);window.__recheck=null;}
   window.__picker=false;
   const logo=`<img class="glogo" src="${h(BRAND.icon||GM_LOGO)}" alt="Gang Manager">`;
