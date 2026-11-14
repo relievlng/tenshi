@@ -3815,25 +3815,33 @@ _ADMIN_HTML = r"""<!doctype html><html lang=en><head><meta charset=utf-8>
 <title>Gang Manager — Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#07070a;--card:rgba(20,20,26,.72);--cardsolid:#15151b;--line:rgba(255,255,255,.07);--text:#f2f2f6;--mute:#9a9aa8;--brand:#9a9aa8;--brand2:#c9c9d2;--ok:#22c55e;--bad:#ef4444;--warn:#f59e0b;--blue:#60a5fa;--purple:#a78bfa;--r:18px}
+:root{--bg:#07070a;--card:rgba(20,20,26,.72);--line:rgba(255,255,255,.07);--text:#f2f2f6;--mute:#9a9aa8;--brand:#9a9aa8;--brand2:#c9c9d2;--ok:#22c55e;--bad:#ef4444;--warn:#f59e0b;--blue:#60a5fa;--purple:#a78bfa;--r:18px}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--text);min-height:100vh;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-body::before{content:"";position:fixed;inset:-20%;z-index:-1;pointer-events:none;background:radial-gradient(900px 520px at 12% -8%,rgba(255,255,255,.22),transparent 60%),radial-gradient(760px 520px at 102% 2%,rgba(130,20,70,.20),transparent 55%),radial-gradient(640px 640px at 50% 118%,rgba(60,10,36,.28),transparent 62%);animation:drift 20s ease-in-out infinite alternate}
+body::before{content:"";position:fixed;inset:-20%;z-index:-1;pointer-events:none;background:radial-gradient(900px 520px at 12% -8%,rgba(255,255,255,.22),transparent 60%),radial-gradient(760px 520px at 102% 2%,rgba(130,20,70,.22),transparent 55%),radial-gradient(640px 640px at 50% 118%,rgba(60,10,36,.30),transparent 62%);animation:drift 20s ease-in-out infinite alternate}
 @keyframes drift{to{transform:translate3d(0,-14px,0) scale(1.04)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes shimmer{100%{background-position:-200% 0}}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+@keyframes pop{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
 a{text-decoration:none;color:inherit}
 ::selection{background:rgba(255,255,255,.35)}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:8px}
 header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(7,7,10,.92),rgba(7,7,10,.72));backdrop-filter:blur(12px)}
 .logo{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;overflow:hidden;background:#0d0d12;border:1px solid rgba(255,255,255,.4);box-shadow:0 0 22px rgba(255,255,255,.3)}
 .logo img{width:100%;height:100%;object-fit:cover;display:block}
-.brand{font-family:"Space Grotesk",sans-serif;font-size:19px;font-weight:700;letter-spacing:.5px;background:linear-gradient(90deg,#fff,#e8e8ee);-webkit-background-clip:text;background-clip:text;color:transparent;flex:1}
-.brand small{font-family:"Inter";font-weight:500;font-size:12px;color:var(--mute);letter-spacing:0;display:block;margin-top:-2px}
+.brand{font-family:"Space Grotesk",sans-serif;font-size:19px;font-weight:700;letter-spacing:.5px;background:linear-gradient(90deg,#fff,#e8e8ee 40%,#b9b9c4 70%,#fff);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;flex:1;animation:sheen 6s linear infinite}
+@keyframes sheen{to{background-position:200% center}}
+.brand small{font-family:"Inter";font-weight:500;font-size:12px;color:var(--mute);letter-spacing:0;display:block;margin-top:-2px;-webkit-text-fill-color:var(--mute)}
+.kbtn{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute);border:1px solid var(--line);background:rgba(255,255,255,.04);padding:6px 10px;border-radius:9px;cursor:pointer}
+.kbtn kbd{font-family:inherit;font-size:11px;background:rgba(255,255,255,.1);border-radius:5px;padding:1px 5px}
 .userchip{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);font-size:13px;font-weight:600}
 .userchip img{width:28px;height:28px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.14);display:none}
 .opbadge{font-size:9.5px;font-weight:800;letter-spacing:.8px;padding:3px 7px;border-radius:6px;white-space:nowrap;background:linear-gradient(90deg,#c9c9d2,#fff);color:#111;display:none}
-.wrap{max-width:900px;margin:0 auto;padding:20px 18px 60px}
+.wrap{max-width:900px;margin:0 auto;padding:20px 18px 70px}
 button{font:inherit;cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);padding:9px 14px;border-radius:11px;transition:.16s ease}
 button:hover{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.1);transform:translateY(-1px)}
 button:active{transform:translateY(0)}
@@ -3844,15 +3852,29 @@ button.danger{border-color:rgba(239,68,68,.3);color:#ffb0b0;background:transpare
 button.danger:hover{background:var(--bad);border-color:var(--bad);color:#fff}
 button.sm{padding:7px 11px;font-size:12.5px;border-radius:9px}
 button.pur{border-color:rgba(167,139,250,.35);color:#d4c6ff;background:rgba(167,139,250,.08)}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:12px;margin:4px 0 20px}
-.stat{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;backdrop-filter:blur(10px)}
-.stat .n{font-size:26px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+button.on{border-color:var(--ok);color:#86efac;background:rgba(34,197,94,.1)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:12px;margin:4px 0 16px}
+.stat{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 16px 14px;backdrop-filter:blur(10px);animation:fadeUp .4s ease both;transition:.18s}
+.stat:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.2)}
+.stat::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--brand2);opacity:.85}
+.stat[data-k=active]::before{background:var(--ok)}.stat[data-k=life]::before{background:var(--purple)}.stat[data-k=bans]::before{background:var(--bad)}.stat[data-k=members]::before{background:var(--blue)}.stat[data-k=staff]::before{background:var(--warn)}
+.stat .ic{position:absolute;top:12px;right:13px;font-size:15px;opacity:.55}
+.stat .n{font-size:27px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
 .stat .l{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
 .tabs{display:inline-flex;gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
 .tab{padding:8px 18px;border-radius:10px;cursor:pointer;color:var(--mute);font-weight:600;transition:.18s;user-select:none}
+.tab:hover{color:var(--text)}
 .tab.active{background:linear-gradient(135deg,var(--brand),#3a3a42);color:#fff;box-shadow:0 6px 18px rgba(255,255,255,.2)}
+.bd{padding:15px 18px}
+.bdbar{display:flex;height:11px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.05);gap:2px}
+.bdbar i{display:block;transition:width .6s cubic-bezier(.22,1,.36,1)}
+.bdbar .sa{background:linear-gradient(90deg,#22c55e,#16a34a)}.bdbar .sl{background:linear-gradient(90deg,#a78bfa,#7c5cff)}.bdbar .se{background:linear-gradient(90deg,#ef4444,#b91c1c)}.bdbar .sn{background:rgba(255,255,255,.12)}
+.bdleg{display:flex;gap:16px;flex-wrap:wrap;margin-top:11px;font-size:12px;color:var(--mute)}
+.bdleg span{display:inline-flex;align-items:center;gap:6px}
+.bdleg b{color:var(--text)}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-.toolbar input{flex:1;min-width:180px}
+.toolbar input{flex:1;min-width:170px}
 .toolbar select{font:inherit;padding:10px 13px;border-radius:11px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--text)}
 .toolbar select:focus{outline:none;border-color:rgba(255,255,255,.55)}
 .filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
@@ -3861,7 +3883,9 @@ button.pur{border-color:rgba(167,139,250,.35);color:#d4c6ff;background:rgba(167,
 .fchip.on{background:linear-gradient(135deg,var(--brand),#3a3a42);color:#fff;border-color:transparent}
 .fchip .cnt{font-size:11px;background:rgba(0,0,0,.25);padding:1px 7px;border-radius:999px}
 .fchip.on .cnt{background:rgba(255,255,255,.22)}
-.card{position:relative;background:rgba(14,14,20,.62);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;backdrop-filter:blur(10px)}
+.card{position:relative;background:rgba(14,14,20,.62);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;backdrop-filter:blur(10px);transition:.2s}
+#subsList .card,#bansList .rowline,#staffList .rowline{animation:fadeUp .32s ease both}
+#subsList .card:hover{border-color:rgba(255,255,255,.18);box-shadow:0 18px 50px -20px rgba(130,20,70,.5),0 0 0 1px rgba(255,255,255,.04)}
 .card h3{margin:0 0 4px;font-size:15px;font-weight:700}
 .card .hint{color:var(--mute);font-size:13px;margin:0 0 14px}
 .srvhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -3878,12 +3902,10 @@ button.pur{border-color:rgba(167,139,250,.35);color:#d4c6ff;background:rgba(167,
 .kv .k{font-size:10.5px;color:var(--mute);text-transform:uppercase;letter-spacing:.6px}
 .kv .v{font-size:13.5px;font-weight:500;word-break:break-word}
 .id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--mute)}
-.copy{cursor:pointer;transition:.12s}
-.copy:hover{color:var(--text) !important;text-decoration:underline}
+.copy{cursor:pointer;transition:.12s}.copy:hover{color:var(--text) !important;text-decoration:underline}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--mute);word-break:break-all}
 .mute{color:var(--mute)}
-.rev{font-size:13px;color:var(--mute);margin:0 0 14px}
-.rev b{color:#86efac;font-weight:700}
+.rev{font-size:13px;color:var(--mute);margin:0 0 14px}.rev b{color:#86efac;font-weight:700}
 .pad{padding:22px;text-align:center;color:var(--mute)}
 input{font:inherit;padding:10px 13px;border-radius:11px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--text);width:100%}
 input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.06)}
@@ -3891,34 +3913,47 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
 .frm input{flex:1;min-width:150px}
 .rowline{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:13px 0;border-bottom:1px solid var(--line)}
 .rowline:last-child{border-bottom:0}
-.rowmain .nm{font-weight:600}
-.rowmain .mt{font-size:12px;color:var(--mute);margin-top:3px}
+.rowmain .nm{font-weight:600}.rowmain .mt{font-size:12px;color:var(--mute);margin-top:3px}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th{text-align:left;color:var(--mute);font-weight:600;padding:9px 10px;border-bottom:1px solid var(--line);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px}
 .tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+.sk{height:78px;border-radius:16px;margin-bottom:12px;background:linear-gradient(100deg,rgba(255,255,255,.04) 30%,rgba(255,255,255,.09) 50%,rgba(255,255,255,.04) 70%);background-size:200% 100%;animation:shimmer 1.3s linear infinite}
 .gate{min-height:70vh;display:grid;place-items:center}
 .gate .card{max-width:420px;text-align:center}
 .gate .big{font-size:42px}
 .gate h2{margin:12px 0 6px}
-.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#1a1a22;border:1px solid var(--line);color:var(--text);padding:11px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.2s;font-weight:600;font-size:13.5px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#1a1a22;border:1px solid var(--line);color:var(--text);padding:11px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.2s;font-weight:600;font-size:13.5px;box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;align-items:center;gap:8px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.bad{border-color:rgba(239,68,68,.4);color:#ffb0b0}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;animation:pulse 1.4s ease-in-out infinite}
+.cmdk{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);display:none;align-items:flex-start;justify-content:center;padding-top:12vh}
+.cmdk.show{display:flex}
+.cmdkbox{width:min(560px,92vw);background:#121218;border:1px solid rgba(255,255,255,.12);border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);animation:pop .14s ease}
+.cmdkbox input{border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:16px 18px;font-size:15px}
+.cmdkList{max-height:50vh;overflow:auto;padding:6px}
+.ci{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;font-size:14px}
+.ci:hover,.ci.sel{background:rgba(255,255,255,.08)}
+.ci .cig{font-size:15px;width:20px;text-align:center}
+.ci .cis{margin-left:auto;font-size:11px;color:var(--mute)}
+.cmdkFoot{padding:9px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--mute);display:flex;gap:14px}
+.cmdkFoot kbd{background:rgba(255,255,255,.1);border-radius:5px;padding:1px 6px;font-family:inherit}
 </style></head><body>
 <header>
   <div class="logo"><img src="/gm-logo.png" alt="Gang Manager" onerror="this.style.display='none'"></div>
   <div class="brand">GANG MANAGER<small>Admin Control</small></div>
+  <div class="kbtn" id=cmdkOpen>Search <kbd>⌘K</kbd></div>
   <div class="userchip" id=uchip style=display:none><img id=uav alt=""><span id=uname></span><span class=opbadge id=ownerBadge>OWNER</span></div>
-  <a href="/logout"><button class="ghost sm" style="margin-left:4px">Log out</button></a>
+  <a href="/logout"><button class="ghost sm">Log out</button></a>
 </header>
 <div id=gate class="wrap gate"></div>
 <div id=app class=wrap style=display:none>
   <div class=stats>
-    <div class=stat><div class=n id=statServers>0</div><div class=l>Servers</div></div>
-    <div class=stat><div class=n id=statActive>0</div><div class=l>Active</div></div>
-    <div class=stat><div class=n id=statLife>0</div><div class=l>Lifetime</div></div>
-    <div class=stat><div class=n id=statMembers>0</div><div class=l>Members</div></div>
-    <div class=stat><div class=n id=statBans>0</div><div class=l>Banned</div></div>
-    <div class=stat><div class=n id=statStaff>0</div><div class=l>Staff</div></div>
+    <div class=stat data-k=servers><div class=ic>🌐</div><div class=n id=statServers>0</div><div class=l>Servers</div></div>
+    <div class=stat data-k=active><div class=ic>✅</div><div class=n id=statActive>0</div><div class=l>Active</div></div>
+    <div class=stat data-k=life><div class=ic>♾️</div><div class=n id=statLife>0</div><div class=l>Lifetime</div></div>
+    <div class=stat data-k=members><div class=ic>👥</div><div class=n id=statMembers>0</div><div class=l>Members</div></div>
+    <div class=stat data-k=bans><div class=ic>⛔</div><div class=n id=statBans>0</div><div class=l>Banned</div></div>
+    <div class=stat data-k=staff><div class=ic>🛡️</div><div class=n id=statStaff>0</div><div class=l>Staff</div></div>
   </div>
   <div class=tabs>
     <div class="tab active" id=tab-subs>Subscriptions</div>
@@ -3927,14 +3962,11 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
     <div class=tab id=tab-staff>Staff access</div>
   </div>
   <div id=pan-subs>
+    <div class="card bd" id=subHealth style=display:none></div>
     <div class=toolbar>
       <input id=subSearch placeholder="Search servers by name or ID…" autocomplete=off>
-      <select id=subSort>
-        <option value=members>Most members</option>
-        <option value=days>Days left</option>
-        <option value=name>Name A–Z</option>
-        <option value=created>Newest server</option>
-      </select>
+      <select id=subSort><option value=members>Most members</option><option value=days>Days left</option><option value=name>Name A–Z</option><option value=created>Newest server</option></select>
+      <button class="ghost sm" id=liveBtn>⟳ Live</button>
       <button class="ghost sm" id=subRefresh>↻ Refresh</button>
     </div>
     <div class=filters id=subFilters></div>
@@ -3948,13 +3980,12 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
     <div class=card><h3>Ban a Discord user</h3><p class=hint>A ban is global — the bot ignores them in every server: no commands, buttons, tickets or menus.</p>
       <div class=frm><input id=banId placeholder="Discord user ID"><input id=banReason placeholder="Reason (optional)"><button class="danger" id=banBtn>Ban</button></div>
     </div>
-    <div class=card><div class=toolbar style="margin-bottom:4px"><input id=banSearch placeholder="Search bans…" autocomplete=off></div><div id=bansList></div></div>
+    <div class=card><div class=toolbar style=margin-bottom:4px><input id=banSearch placeholder="Search bans…" autocomplete=off></div><div id=bansList></div></div>
   </div>
   <div id=pan-shop style=display:none>
     <div class=card><h3>Shop log</h3><p class=hint>Every purchase, with the email and the IP captured at checkout.</p>
-      <div class=toolbar style="margin-bottom:10px"><input id=shopSearch placeholder="Search email, IP or server…" autocomplete=off></div>
-      <p class=rev id=shopRev></p>
-      <div id=shopList></div>
+      <div class=toolbar style=margin-bottom:10px><input id=shopSearch placeholder="Search email, IP or server…" autocomplete=off><button class="ghost sm" id=csvBtn>⬇ CSV</button></div>
+      <p class=rev id=shopRev></p><div id=shopList></div>
     </div>
   </div>
   <div id=pan-staff style=display:none>
@@ -3965,6 +3996,7 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
     <div class=card><div id=staffList></div></div>
   </div>
 </div>
+<div class=cmdk id=cmdk><div class=cmdkbox><input id=cmdkInput placeholder="Jump to a server or section…" autocomplete=off><div class=cmdkList id=cmdkList></div><div class=cmdkFoot><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></div></div></div>
 <div class=toast id=toast></div>
 <script>
 (function(){
@@ -3976,117 +4008,51 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
   function money(c,cur){if(!c)return '—';return (c/100).toFixed(2)+' '+(cur||'')}
   function copyspan(v,cls){if(!v)return '<span class=mute>—</span>';return '<span class="'+(cls||'id')+' copy" data-copy="'+esc(v)+'" title="Click to copy">'+esc(v)+'</span>'}
   function idv(name,id){var n=name?esc(name)+' ':'';return id?(n+copyspan(id,'id')):(n||'<span class=mute>—</span>')}
-  var STATE={owner:false},SERVERS=[],SHOP=[],BANS=[];
+  function animateNum(el,to){var from=0,st=performance.now();function tick(t){var k=Math.min(1,(t-st)/650);el.textContent=Math.round(from+(to-from)*(1-Math.pow(1-k,3))).toLocaleString();if(k<1)requestAnimationFrame(tick)}requestAnimationFrame(tick)}
+  var STATE={owner:false},SERVERS=[],SHOP=[],BANS=[],firstStats=true,LIVE=false,liveTimer=null,curTab='subs';
   var SUBFILTER='all',SUBSORT='members',SUBQ='',SHOPQ='',BANQ='';
-  function api(path,method,body){
-    var ctrl=new AbortController();var to=setTimeout(function(){ctrl.abort()},12000);
-    return fetch(path,{method:method||'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,credentials:'same-origin',signal:ctrl.signal})
-      .then(function(r){return r.json().catch(function(){return {ok:false,error:'bad response'}})})
-      .catch(function(){return {ok:false,error:'network'}})
-      .then(function(j){clearTimeout(to);return j});
-  }
-  function toast(msg,bad){var t=$('#toast');t.textContent=msg;t.className='toast show'+(bad?' bad':'');setTimeout(function(){t.className='toast'},2400)}
-  function boot(){
-    api('/api/admin/me').then(function(me){
-      if(!me||!me.authed){showGate('login');return}
-      var u=me.user||{};
-      if(u.name){$('#uname').textContent=u.name;if(u.avatar){$('#uav').src=u.avatar;$('#uav').style.display=''}$('#uchip').style.display=''}
-      if(!me.access){showGate('denied');return}
-      STATE.owner=!!me.owner;
-      if(STATE.owner)$('#ownerBadge').style.display='';
-      $('#gate').style.display='none';$('#app').style.display='';
-      selectTab('subs');loadSubs();
-    }).catch(function(){showGate('error')});
-  }
-  function showGate(kind){
-    $('#app').style.display='none';var g=$('#gate');g.style.display='';
-    if(kind==='login')g.innerHTML='<div class=card><div class=big>🔐</div><h2>Admin sign-in</h2><p class=mute>Log in with a Discord account that owns or is authorised for the bot.</p><a href="/login?next=/admin"><button class="brand-btn" style="margin-top:12px">Log in with Discord</button></a></div>';
-    else if(kind==='denied')g.innerHTML='<div class=card><div class=big>⛔</div><h2>Not authorised</h2><p class=mute>This account isn\'t on the admin list. Ask the owner to authorise your Discord ID.</p><a href="/logout"><button class="ghost" style="margin-top:12px">Switch account</button></a></div>';
-    else g.innerHTML='<div class=card><div class=big>⚠️</div><h2>Couldn\'t load</h2><p class=mute>Something went wrong. Refresh to try again.</p><a href="/admin"><button class="ghost" style="margin-top:12px">Refresh</button></a></div>';
-  }
-  function selectTab(id){
-    ['subs','bans','shop','staff'].forEach(function(t){var on=t===id,tab=$('#tab-'+t),pan=$('#pan-'+t);if(tab)tab.classList.toggle('active',on);if(pan)pan.style.display=on?'':'none'});
-    if(id==='subs')loadSubs();if(id==='bans')loadBans();if(id==='shop')loadShop();if(id==='staff')loadStaff();
-  }
-  function setStats(c){c=c||{};$('#statServers').textContent=nf(c.servers||0);$('#statActive').textContent=nf(c.active||0);$('#statLife').textContent=nf(c.lifetime||0);$('#statMembers').textContent=nf(c.members||0);$('#statBans').textContent=nf(c.bans||0);$('#statStaff').textContent=nf(c.staff||0)}
+  function api(path,method,body){var ctrl=new AbortController(),to=setTimeout(function(){ctrl.abort()},12000);return fetch(path,{method:method||'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,credentials:'same-origin',signal:ctrl.signal}).then(function(r){return r.json().catch(function(){return {ok:false,error:'bad response'}})}).catch(function(){return {ok:false,error:'network'}}).then(function(j){clearTimeout(to);return j})}
+  function toast(msg,bad){var t=$('#toast');t.innerHTML='<span>'+(bad?'⚠️':'✓')+'</span>'+esc(msg);t.className='toast show'+(bad?' bad':'');setTimeout(function(){t.className='toast'},2400)}
+  function boot(){api('/api/admin/me').then(function(me){if(!me||!me.authed){showGate('login');return}var u=me.user||{};if(u.name){$('#uname').textContent=u.name;if(u.avatar){$('#uav').src=u.avatar;$('#uav').style.display=''}$('#uchip').style.display=''}if(!me.access){showGate('denied');return}STATE.owner=!!me.owner;if(STATE.owner)$('#ownerBadge').style.display='';$('#gate').style.display='none';$('#app').style.display='';selectTab('subs');loadSubs()}).catch(function(){showGate('error')})}
+  function showGate(kind){$('#app').style.display='none';var g=$('#gate');g.style.display='';if(kind==='login')g.innerHTML='<div class=card><div class=big>🔐</div><h2>Admin sign-in</h2><p class=mute>Log in with a Discord account that owns or is authorised for the bot.</p><a href="/login?next=/admin"><button class="brand-btn" style=margin-top:12px>Log in with Discord</button></a></div>';else if(kind==='denied')g.innerHTML='<div class=card><div class=big>⛔</div><h2>Not authorised</h2><p class=mute>This account isn\'t on the admin list. Ask the owner to authorise your Discord ID.</p><a href="/logout"><button class=ghost style=margin-top:12px>Switch account</button></a></div>';else g.innerHTML='<div class=card><div class=big>⚠️</div><h2>Couldn\'t load</h2><p class=mute>Something went wrong. Refresh to try again.</p><a href="/admin"><button class=ghost style=margin-top:12px>Refresh</button></a></div>'}
+  function selectTab(id){curTab=id;['subs','bans','shop','staff'].forEach(function(t){var on=t===id,tab=$('#tab-'+t),pan=$('#pan-'+t);if(tab)tab.classList.toggle('active',on);if(pan)pan.style.display=on?'':'none'});if(id==='subs')loadSubs();if(id==='bans')loadBans();if(id==='shop')loadShop();if(id==='staff')loadStaff()}
+  function setStats(c){c=c||{};var map={statServers:c.servers||0,statActive:c.active||0,statLife:c.lifetime||0,statMembers:c.members||0,statBans:c.bans||0,statStaff:c.staff||0};for(var k in map){var el=document.getElementById(k);if(!el)continue;if(firstStats)animateNum(el,map[k]);else el.textContent=nf(map[k])}firstStats=false}
   function bucket(s){if(s.lifetime)return 'lifetime';if(s.active)return 'active';if(s.status==='expired')return 'expired';return 'none'}
   function badge(s){var b=bucket(s);if(b==='lifetime')return '<span class="badge pur">Lifetime</span>';if(b==='active')return '<span class="badge live">Active</span>';if(b==='expired')return '<span class="badge red">Expired</span>';return '<span class="badge off">Inactive</span>'}
   function expiry(s){if(s.lifetime)return 'Never (lifetime)';if(s.active&&s.days_left!=null)return s.days_left+' days left'+(s.expires_at?' · '+fmtIso(s.expires_at):'');if(s.expires_at)return fmtIso(s.expires_at);return '—'}
   function kv(k,v){return '<div class=kv><span class=k>'+k+'</span><span class=v>'+v+'</span></div>'}
-  function loadSubs(){
-    var box=$('#subsList');if(!SERVERS.length)box.innerHTML='<div class=pad>Loading…</div>';
-    api('/api/admin/overview').then(function(d){
-      if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}
-      setStats(d.counts);SERVERS=d.servers||[];renderFilters();renderSubs();
-    });
-  }
-  function renderFilters(){
-    var counts={all:SERVERS.length,active:0,lifetime:0,expired:0,none:0};
-    SERVERS.forEach(function(s){counts[bucket(s)]++});
-    var defs=[['all','All'],['active','Active'],['lifetime','Lifetime'],['expired','Expired'],['none','Inactive']];
-    $('#subFilters').innerHTML=defs.map(function(d){return '<div class="fchip'+(SUBFILTER===d[0]?' on':'')+'" data-f="'+d[0]+'">'+d[1]+' <span class=cnt>'+counts[d[0]]+'</span></div>'}).join('');
-    $('#subFilters').querySelectorAll('.fchip').forEach(function(c){c.onclick=function(){SUBFILTER=c.getAttribute('data-f');renderFilters();renderSubs()}});
-  }
-  function renderSubs(){
-    var q=SUBQ.toLowerCase();
-    var list=SERVERS.filter(function(s){if(SUBFILTER!=='all'&&bucket(s)!==SUBFILTER)return false;if(q&&!((s.name||'').toLowerCase().indexOf(q)>=0||String(s.id).indexOf(q)>=0))return false;return true});
-    list.sort(function(a,b){
-      if(SUBSORT==='members')return (b.members||0)-(a.members||0);
-      if(SUBSORT==='name')return (a.name||'').localeCompare(b.name||'');
-      if(SUBSORT==='created')return (b.created_at||0)-(a.created_at||0);
-      var da=a.lifetime?1e9:(a.days_left==null?-1:a.days_left),db=b.lifetime?1e9:(b.days_left==null?-1:b.days_left);return da-db;
-    });
-    var box=$('#subsList');
-    if(!list.length){box.innerHTML='<div class=pad>No servers match.</div>';return}
-    box.innerHTML=list.map(function(s){
-      var ic=s.icon?'<img src="'+esc(s.icon)+'" alt="">':'';
-      return '<div class=card><div class=srvhead><div class=srvname>'+ic+esc(s.name)+' '+badge(s)+'</div>'
-        +'<div class=acts>'
-        +'<button class="sm" data-g="'+s.id+'" data-a=add data-d=7>+7d</button>'
-        +'<button class="sm" data-g="'+s.id+'" data-a=add data-d=30>+30d</button>'
-        +'<button class="sm pur" data-g="'+s.id+'" data-a=life>♾ Lifetime</button>'
-        +'<button class="sm danger" data-g="'+s.id+'" data-a=rev>Revoke</button>'
-        +'</div></div><div class=grid>'
-        +kv('Members',nf(s.members))+kv('Plan',esc(s.plan||'—'))+kv('Expires',esc(expiry(s)))
-        +kv('Server owner',idv(s.owner_name,s.owner_id))+kv('Purchased by',idv(s.purchaser_name,s.purchaser_id))
-        +kv('Server ID',copyspan(s.id,'id'))+kv('Stripe customer',copyspan(s.customer_id,'id'))+kv('Stripe sub',copyspan(s.sub_id,'id'))
-        +kv('Server created',fmtTs(s.created_at))+kv('Sub updated',fmtIso(s.updated_at))
-        +'</div></div>';
-    }).join('');
-    box.querySelectorAll('button[data-a]').forEach(function(b){b.onclick=function(){subAction(b)}});
-  }
-  function subAction(b){
-    var g=b.getAttribute('data-g'),a=b.getAttribute('data-a'),body,label;
-    if(a==='add'){var d=parseInt(b.getAttribute('data-d'),10);body={guild_id:g,action:'add_days',days:d};label='Added '+d+' days';}
-    else if(a==='life'){body={guild_id:g,action:'lifetime'};label='Lifetime granted';}
-    else{if(!confirm('Revoke this server\'s subscription?'))return;body={guild_id:g,action:'revoke'};label='Revoked';}
-    b.disabled=true;
-    api('/api/admin/sub','POST',body).then(function(r){b.disabled=false;if(r.ok){toast(label+' ✓');loadSubs()}else toast(r.error||'Failed',true)});
-  }
-  function customDays(){var g=$('#cdGuild').value.trim(),d=parseInt($('#cdDays').value,10);if(!g){toast('Enter a server ID',true);return}if(!d){toast('Enter days',true);return}api('/api/admin/sub','POST',{guild_id:g,action:'add_days',days:d}).then(function(r){if(r.ok){toast('Done ✓');$('#cdDays').value='';loadSubs()}else toast(r.error||'Failed',true)})}
-  function loadBans(){var box=$('#bansList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/bans').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}BANS=d.bans||[];renderBans()})}
-  function renderBans(){var box=$('#bansList'),q=BANQ.toLowerCase();var list=BANS.filter(function(b){return !q||(String(b.id).indexOf(q)>=0||(b.name||'').toLowerCase().indexOf(q)>=0||(b.reason||'').toLowerCase().indexOf(q)>=0)});if(!list.length){box.innerHTML='<div class=pad>'+(BANS.length?'No bans match.':'No one is banned.')+'</div>';return}box.innerHTML=list.map(function(b){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(b.name||('ID '+b.id))+'</div><div class=mt>'+copyspan(b.id,'mono')+(b.reason?' · '+esc(b.reason):'')+' · '+fmtTs(b.ts)+'</div></div><button class="sm ghost" data-u="'+esc(b.id)+'">Unban</button></div>'}).join('');box.querySelectorAll('button[data-u]').forEach(function(x){x.onclick=function(){api('/api/admin/unban','POST',{user_id:x.getAttribute('data-u')}).then(function(r){if(r.ok){toast('Unbanned ✓');loadBans();loadSubs()}else toast(r.error||'Failed',true)})}})}
-  function doBan(){var id=$('#banId').value.trim(),rs=$('#banReason').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/ban','POST',{user_id:id,reason:rs}).then(function(r){if(r.ok){toast('Banned ✓');$('#banId').value='';$('#banReason').value='';loadBans();loadSubs()}else toast(r.error||'Failed',true)})}
-  function loadShop(){var box=$('#shopList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/shop_log').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}SHOP=d.log||[];renderShop()})}
-  function renderShop(){
-    var box=$('#shopList'),q=SHOPQ.toLowerCase();
-    var list=SHOP.filter(function(e){return !q||((e.email||'').toLowerCase().indexOf(q)>=0||(e.ip||'').indexOf(q)>=0||(e.guild_name||'').toLowerCase().indexOf(q)>=0||String(e.guild_id||'').indexOf(q)>=0)});
-    var tot={};list.forEach(function(e){if(e.amount){var c=e.currency||'';tot[c]=(tot[c]||0)+e.amount}});
-    var revs=Object.keys(tot).map(function(c){return (tot[c]/100).toFixed(2)+' '+c});
-    $('#shopRev').innerHTML=list.length?('Showing <b>'+list.length+'</b> · total <b>'+(revs.join(' + ')||'—')+'</b>'):'';
-    if(!list.length){box.innerHTML='<div class=pad>'+(SHOP.length?'Nothing matches.':'No purchases logged yet — they show here after the next sale.')+'</div>';return}
-    box.innerHTML='<table class=tbl><thead><tr><th>When</th><th>Type</th><th>Email</th><th>IP</th><th>Amount</th><th>Server</th></tr></thead><tbody>'+list.map(function(e){return '<tr><td>'+fmtTs(e.ts)+'</td><td>'+esc(e.kind||'')+'</td><td>'+copyspan(e.email,'mono')+'</td><td>'+copyspan(e.ip,'mono')+'</td><td>'+money(e.amount,e.currency)+'</td><td>'+esc(e.guild_name||e.guild_id||'')+'</td></tr>'}).join('')+'</tbody></table>';
-  }
-  function loadStaff(){var box=$('#staffList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/staff').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}var canEdit=!!d.owner;$('#staffForm').style.display=canEdit?'':'none';$('#staffOwnerNote').style.display=canEdit?'none':'';if(!d.staff.length){box.innerHTML='<div class=pad>No extra staff authorised — just you.</div>';return}box.innerHTML=d.staff.map(function(s){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(s.name||('ID '+s.id))+'</div><div class=mt>'+copyspan(s.id,'mono')+' · added '+fmtTs(s.ts)+'</div></div>'+(canEdit?'<button class="sm danger" data-s="'+esc(s.id)+'">Remove</button>':'')+'</div>'}).join('');if(canEdit)box.querySelectorAll('button[data-s]').forEach(function(x){x.onclick=function(){api('/api/admin/staff_remove','POST',{user_id:x.getAttribute('data-s')}).then(function(r){if(r.ok){toast('Removed ✓');loadStaff();loadSubs()}else toast(r.error||'Failed',true)})}})})}
-  function addStaff(){var id=$('#staffId').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/staff_add','POST',{user_id:id}).then(function(r){if(r.ok){toast('Authorised ✓');$('#staffId').value='';loadStaff();loadSubs()}else toast(r.error||'Failed',true)})}
-  document.addEventListener('click',function(e){var t=e.target;
-    if(t.id==='tab-subs')selectTab('subs');if(t.id==='tab-bans')selectTab('bans');if(t.id==='tab-shop')selectTab('shop');if(t.id==='tab-staff')selectTab('staff');
-    if(t.id==='banBtn')doBan();if(t.id==='staffBtn')addStaff();if(t.id==='cdBtn')customDays();if(t.id==='subRefresh')loadSubs();
-    if(t.classList&&t.classList.contains('copy')){var v=t.getAttribute('data-copy');try{navigator.clipboard.writeText(v);toast('Copied '+v)}catch(x){toast('Copy failed',true)}}
-  });
-  document.addEventListener('input',function(e){var t=e.target;if(t.id==='subSearch'){SUBQ=t.value;renderSubs()}if(t.id==='shopSearch'){SHOPQ=t.value;renderShop()}if(t.id==='banSearch'){BANQ=t.value;renderBans()}});
+  function loadSubs(){var box=$('#subsList');if(!SERVERS.length)box.innerHTML='<div class=sk></div><div class=sk></div>';api('/api/admin/overview').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}setStats(d.counts);SERVERS=d.servers||[];renderHealth();renderFilters();renderSubs()})}
+  function renderHealth(){var c={active:0,lifetime:0,expired:0,none:0};SERVERS.forEach(function(s){c[bucket(s)]++});var tot=SERVERS.length||1;function pc(n){return (n/tot*100).toFixed(1)+'%'}var el=$('#subHealth');if(!SERVERS.length){el.style.display='none';return}el.style.display='';el.innerHTML='<div class=bdbar><i class=sa style=width:'+pc(c.active)+'></i><i class=sl style=width:'+pc(c.lifetime)+'></i><i class=se style=width:'+pc(c.expired)+'></i><i class=sn style=width:'+pc(c.none)+'></i></div><div class=bdleg><span><i class="dot" style=background:var(--ok)></i>Active <b>'+c.active+'</b></span><span><i class="dot" style=background:var(--purple)></i>Lifetime <b>'+c.lifetime+'</b></span><span><i class="dot" style=background:var(--bad)></i>Expired <b>'+c.expired+'</b></span><span><i class="dot" style=background:rgba(255,255,255,.3)></i>Inactive <b>'+c.none+'</b></span></div>'}
+  function renderFilters(){var counts={all:SERVERS.length,active:0,lifetime:0,expired:0,none:0};SERVERS.forEach(function(s){counts[bucket(s)]++});var defs=[['all','All'],['active','Active'],['lifetime','Lifetime'],['expired','Expired'],['none','Inactive']];$('#subFilters').innerHTML=defs.map(function(d){return '<div class="fchip'+(SUBFILTER===d[0]?' on':'')+'" data-f="'+d[0]+'">'+d[1]+' <span class=cnt>'+counts[d[0]]+'</span></div>'}).join('');$('#subFilters').querySelectorAll('.fchip').forEach(function(c){c.onclick=function(){SUBFILTER=c.getAttribute('data-f');renderFilters();renderSubs()}})}
+  function filteredServers(){var q=SUBQ.toLowerCase();var list=SERVERS.filter(function(s){if(SUBFILTER!=='all'&&bucket(s)!==SUBFILTER)return false;if(q&&!((s.name||'').toLowerCase().indexOf(q)>=0||String(s.id).indexOf(q)>=0))return false;return true});list.sort(function(a,b){if(SUBSORT==='members')return (b.members||0)-(a.members||0);if(SUBSORT==='name')return (a.name||'').localeCompare(b.name||'');if(SUBSORT==='created')return (b.created_at||0)-(a.created_at||0);var da=a.lifetime?1e9:(a.days_left==null?-1:a.days_left),db=b.lifetime?1e9:(b.days_left==null?-1:b.days_left);return da-db});return list}
+  function renderSubs(){var box=$('#subsList'),list=filteredServers();if(!list.length){box.innerHTML='<div class=pad>No servers match.</div>';return}box.innerHTML=list.map(function(s){var ic=s.icon?'<img src="'+esc(s.icon)+'" alt="">':'';return '<div class=card><div class=srvhead><div class=srvname>'+ic+esc(s.name)+' '+badge(s)+'</div><div class=acts><button class=sm data-g="'+s.id+'" data-a=add data-d=7>+7d</button><button class=sm data-g="'+s.id+'" data-a=add data-d=30>+30d</button><button class="sm pur" data-g="'+s.id+'" data-a=life>♾ Lifetime</button><button class="sm danger" data-g="'+s.id+'" data-a=rev>Revoke</button></div></div><div class=grid>'+kv('Members',nf(s.members))+kv('Plan',esc(s.plan||'—'))+kv('Expires',esc(expiry(s)))+kv('Server owner',idv(s.owner_name,s.owner_id))+kv('Purchased by',idv(s.purchaser_name,s.purchaser_id))+kv('Server ID',copyspan(s.id,'id'))+kv('Stripe customer',copyspan(s.customer_id,'id'))+kv('Stripe sub',copyspan(s.sub_id,'id'))+kv('Server created',fmtTs(s.created_at))+kv('Sub updated',fmtIso(s.updated_at))+'</div></div>'}).join('');box.querySelectorAll('button[data-a]').forEach(function(b){b.onclick=function(){subAction(b)}})}
+  function subAction(b){var g=b.getAttribute('data-g'),a=b.getAttribute('data-a'),body,label;if(a==='add'){var d=parseInt(b.getAttribute('data-d'),10);body={guild_id:g,action:'add_days',days:d};label='Added '+d+' days';}else if(a==='life'){body={guild_id:g,action:'lifetime'};label='Lifetime granted';}else{if(!confirm('Revoke this server\'s subscription?'))return;body={guild_id:g,action:'revoke'};label='Revoked';}b.disabled=true;api('/api/admin/sub','POST',body).then(function(r){b.disabled=false;if(r.ok){toast(label);loadSubs()}else toast(r.error||'Failed',true)})}
+  function customDays(){var g=$('#cdGuild').value.trim(),d=parseInt($('#cdDays').value,10);if(!g){toast('Enter a server ID',true);return}if(!d){toast('Enter days',true);return}api('/api/admin/sub','POST',{guild_id:g,action:'add_days',days:d}).then(function(r){if(r.ok){toast('Done');$('#cdDays').value='';loadSubs()}else toast(r.error||'Failed',true)})}
+  function loadBans(){var box=$('#bansList');box.innerHTML='<div class=sk style=height:52px></div>';api('/api/admin/bans').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}BANS=d.bans||[];renderBans()})}
+  function renderBans(){var box=$('#bansList'),q=BANQ.toLowerCase();var list=BANS.filter(function(b){return !q||(String(b.id).indexOf(q)>=0||(b.name||'').toLowerCase().indexOf(q)>=0||(b.reason||'').toLowerCase().indexOf(q)>=0)});if(!list.length){box.innerHTML='<div class=pad>'+(BANS.length?'No bans match.':'No one is banned.')+'</div>';return}box.innerHTML=list.map(function(b){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(b.name||('ID '+b.id))+'</div><div class=mt>'+copyspan(b.id,'mono')+(b.reason?' · '+esc(b.reason):'')+' · '+fmtTs(b.ts)+'</div></div><button class="sm ghost" data-u="'+esc(b.id)+'">Unban</button></div>'}).join('');box.querySelectorAll('button[data-u]').forEach(function(x){x.onclick=function(){api('/api/admin/unban','POST',{user_id:x.getAttribute('data-u')}).then(function(r){if(r.ok){toast('Unbanned');loadBans();loadSubs()}else toast(r.error||'Failed',true)})}})}
+  function doBan(){var id=$('#banId').value.trim(),rs=$('#banReason').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/ban','POST',{user_id:id,reason:rs}).then(function(r){if(r.ok){toast('Banned');$('#banId').value='';$('#banReason').value='';loadBans();loadSubs()}else toast(r.error||'Failed',true)})}
+  function loadShop(){var box=$('#shopList');box.innerHTML='<div class=sk style=height:40px></div><div class=sk style=height:40px></div>';api('/api/admin/shop_log').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}SHOP=d.log||[];renderShop()})}
+  function shopFiltered(){var q=SHOPQ.toLowerCase();return SHOP.filter(function(e){return !q||((e.email||'').toLowerCase().indexOf(q)>=0||(e.ip||'').indexOf(q)>=0||(e.guild_name||'').toLowerCase().indexOf(q)>=0||String(e.guild_id||'').indexOf(q)>=0)})}
+  function renderShop(){var box=$('#shopList'),list=shopFiltered();var tot={};list.forEach(function(e){if(e.amount){var c=e.currency||'';tot[c]=(tot[c]||0)+e.amount}});var revs=Object.keys(tot).map(function(c){return (tot[c]/100).toFixed(2)+' '+c});$('#shopRev').innerHTML=list.length?('Showing <b>'+list.length+'</b> · total <b>'+(revs.join(' + ')||'—')+'</b>'):'';if(!list.length){box.innerHTML='<div class=pad>'+(SHOP.length?'Nothing matches.':'No purchases logged yet — they show here after the next sale.')+'</div>';return}box.innerHTML='<table class=tbl><thead><tr><th>When</th><th>Type</th><th>Email</th><th>IP</th><th>Amount</th><th>Server</th></tr></thead><tbody>'+list.map(function(e){return '<tr><td>'+fmtTs(e.ts)+'</td><td>'+esc(e.kind||'')+'</td><td>'+copyspan(e.email,'mono')+'</td><td>'+copyspan(e.ip,'mono')+'</td><td>'+money(e.amount,e.currency)+'</td><td>'+esc(e.guild_name||e.guild_id||'')+'</td></tr>'}).join('')+'</tbody></table>'}
+  function exportCsv(){var list=shopFiltered();if(!list.length){toast('Nothing to export',true);return}var head=['when','kind','email','ip','amount','currency','server','server_id'];var rows=list.map(function(e){return [fmtTs(e.ts),e.kind||'',e.email||'',e.ip||'',(e.amount?(e.amount/100).toFixed(2):''),e.currency||'',e.guild_name||'',e.guild_id||''].map(function(v){return '"'+String(v).replace(/"/g,'""')+'"'}).join(',')});var csv=head.join(',')+'\n'+rows.join('\n');var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='shop-log.csv';a.click();toast('CSV exported')}
+  function loadStaff(){var box=$('#staffList');box.innerHTML='<div class=sk style=height:52px></div>';api('/api/admin/staff').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}var canEdit=!!d.owner;$('#staffForm').style.display=canEdit?'':'none';$('#staffOwnerNote').style.display=canEdit?'none':'';if(!d.staff.length){box.innerHTML='<div class=pad>No extra staff authorised — just you.</div>';return}box.innerHTML=d.staff.map(function(s){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(s.name||('ID '+s.id))+'</div><div class=mt>'+copyspan(s.id,'mono')+' · added '+fmtTs(s.ts)+'</div></div>'+(canEdit?'<button class="sm danger" data-s="'+esc(s.id)+'">Remove</button>':'')+'</div>'}).join('');if(canEdit)box.querySelectorAll('button[data-s]').forEach(function(x){x.onclick=function(){api('/api/admin/staff_remove','POST',{user_id:x.getAttribute('data-s')}).then(function(r){if(r.ok){toast('Removed');loadStaff();loadSubs()}else toast(r.error||'Failed',true)})}})})}
+  function addStaff(){var id=$('#staffId').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/staff_add','POST',{user_id:id}).then(function(r){if(r.ok){toast('Authorised');$('#staffId').value='';loadStaff();loadSubs()}else toast(r.error||'Failed',true)})}
+  function toggleLive(){LIVE=!LIVE;var b=$('#liveBtn');b.classList.toggle('on',LIVE);b.innerHTML=LIVE?'<span class=live-dot></span> Live':'⟳ Live';if(liveTimer){clearInterval(liveTimer);liveTimer=null}if(LIVE){liveTimer=setInterval(function(){if(document.hidden)return;if(curTab==='subs')loadSubs();else if(curTab==='bans')loadBans();else if(curTab==='shop')loadShop();else loadStaff()},20000);toast('Live refresh on')}}
+  // command palette
+  var cmdkItems=[],cmdkSel=0;
+  function openCmdk(){var o=$('#cmdk');o.classList.add('show');$('#cmdkInput').value='';cmdkBuild('');setTimeout(function(){$('#cmdkInput').focus()},30)}
+  function closeCmdk(){$('#cmdk').classList.remove('show')}
+  function cmdkBuild(q){q=(q||'').toLowerCase();var items=[];var nav=[['subs','📂','Subscriptions'],['bans','⛔','Bans'],['shop','🧾','Shop log'],['staff','🛡️','Staff access']];nav.forEach(function(n){if(!q||n[2].toLowerCase().indexOf(q)>=0)items.push({t:'tab',id:n[0],ic:n[1],label:n[2],sub:'Section'})});SERVERS.forEach(function(s){if(!q||(s.name||'').toLowerCase().indexOf(q)>=0||String(s.id).indexOf(q)>=0)items.push({t:'srv',id:s.id,ic:'🌐',label:s.name,sub:bucket(s)})});cmdkItems=items.slice(0,40);cmdkSel=0;cmdkRender()}
+  function cmdkRender(){$('#cmdkList').innerHTML=cmdkItems.length?cmdkItems.map(function(it,i){return '<div class="ci'+(i===cmdkSel?' sel':'')+'" data-i="'+i+'"><span class=cig>'+it.ic+'</span><span>'+esc(it.label)+'</span><span class=cis>'+esc(it.sub)+'</span></div>'}).join(''):'<div class=pad>No matches</div>';$('#cmdkList').querySelectorAll('.ci').forEach(function(el){el.onclick=function(){cmdkSel=parseInt(el.getAttribute('data-i'),10);cmdkGo()}})}
+  function cmdkGo(){var it=cmdkItems[cmdkSel];if(!it){return}closeCmdk();if(it.t==='tab'){selectTab(it.id)}else{selectTab('subs');SUBFILTER='all';SUBQ='';$('#subSearch').value=String(it.id);SUBQ=String(it.id);renderFilters();renderSubs();toast('Jumped to '+it.label)}}
+  document.addEventListener('click',function(e){var t=e.target;if(t.id==='tab-subs')selectTab('subs');if(t.id==='tab-bans')selectTab('bans');if(t.id==='tab-shop')selectTab('shop');if(t.id==='tab-staff')selectTab('staff');if(t.id==='banBtn')doBan();if(t.id==='staffBtn')addStaff();if(t.id==='cdBtn')customDays();if(t.id==='subRefresh')loadSubs();if(t.id==='liveBtn')toggleLive();if(t.id==='csvBtn')exportCsv();if(t.id==='cmdkOpen'||(t.closest&&t.closest('#cmdkOpen')))openCmdk();if(t.id==='cmdk')closeCmdk();if(t.classList&&t.classList.contains('copy')){var v=t.getAttribute('data-copy');try{navigator.clipboard.writeText(v);toast('Copied '+v)}catch(x){toast('Copy failed',true)}}});
+  document.addEventListener('input',function(e){var t=e.target;if(t.id==='subSearch'){SUBQ=t.value;renderSubs()}if(t.id==='shopSearch'){SHOPQ=t.value;renderShop()}if(t.id==='banSearch'){BANQ=t.value;renderBans()}if(t.id==='cmdkInput'){cmdkBuild(t.value)}});
   document.addEventListener('change',function(e){if(e.target.id==='subSort'){SUBSORT=e.target.value;renderSubs()}});
-  document.addEventListener('keydown',function(e){if(e.key!=='Enter')return;var id=e.target.id;if(id==='banId'||id==='banReason')doBan();if(id==='staffId')addStaff();if(id==='cdGuild'||id==='cdDays')customDays()});
+  document.addEventListener('keydown',function(e){
+    if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();openCmdk();return}
+    if($('#cmdk').classList.contains('show')){if(e.key==='Escape'){closeCmdk()}else if(e.key==='ArrowDown'){e.preventDefault();cmdkSel=Math.min(cmdkItems.length-1,cmdkSel+1);cmdkRender()}else if(e.key==='ArrowUp'){e.preventDefault();cmdkSel=Math.max(0,cmdkSel-1);cmdkRender()}else if(e.key==='Enter'){e.preventDefault();cmdkGo()}return}
+    if(e.key==='Enter'){var id=e.target.id;if(id==='banId'||id==='banReason')doBan();if(id==='staffId')addStaff();if(id==='cdGuild'||id==='cdDays')customDays()}
+  });
   boot();
 })();
 </script></body></html>"""
