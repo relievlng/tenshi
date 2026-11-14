@@ -3844,13 +3844,23 @@ button.danger{border-color:rgba(239,68,68,.3);color:#ffb0b0;background:transpare
 button.danger:hover{background:var(--bad);border-color:var(--bad);color:#fff}
 button.sm{padding:7px 11px;font-size:12.5px;border-radius:9px}
 button.pur{border-color:rgba(167,139,250,.35);color:#d4c6ff;background:rgba(167,139,250,.08)}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:12px;margin:4px 0 20px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:12px;margin:4px 0 20px}
 .stat{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;backdrop-filter:blur(10px)}
 .stat .n{font-size:26px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
 .stat .l{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
 .tabs{display:inline-flex;gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
 .tab{padding:8px 18px;border-radius:10px;cursor:pointer;color:var(--mute);font-weight:600;transition:.18s;user-select:none}
 .tab.active{background:linear-gradient(135deg,var(--brand),#3a3a42);color:#fff;box-shadow:0 6px 18px rgba(255,255,255,.2)}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar input{flex:1;min-width:180px}
+.toolbar select{font:inherit;padding:10px 13px;border-radius:11px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--text)}
+.toolbar select:focus{outline:none;border-color:rgba(255,255,255,.55)}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.fchip{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--mute);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;user-select:none}
+.fchip:hover{border-color:rgba(255,255,255,.4);color:var(--text)}
+.fchip.on{background:linear-gradient(135deg,var(--brand),#3a3a42);color:#fff;border-color:transparent}
+.fchip .cnt{font-size:11px;background:rgba(0,0,0,.25);padding:1px 7px;border-radius:999px}
+.fchip.on .cnt{background:rgba(255,255,255,.22)}
 .card{position:relative;background:rgba(14,14,20,.62);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;backdrop-filter:blur(10px)}
 .card h3{margin:0 0 4px;font-size:15px;font-weight:700}
 .card .hint{color:var(--mute);font-size:13px;margin:0 0 14px}
@@ -3867,9 +3877,13 @@ button.pur{border-color:rgba(167,139,250,.35);color:#d4c6ff;background:rgba(167,
 .kv{display:flex;flex-direction:column;gap:2px;min-width:0}
 .kv .k{font-size:10.5px;color:var(--mute);text-transform:uppercase;letter-spacing:.6px}
 .kv .v{font-size:13.5px;font-weight:500;word-break:break-word}
-.kv .v .id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--mute)}
+.id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--mute)}
+.copy{cursor:pointer;transition:.12s}
+.copy:hover{color:var(--text) !important;text-decoration:underline}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--mute);word-break:break-all}
 .mute{color:var(--mute)}
+.rev{font-size:13px;color:var(--mute);margin:0 0 14px}
+.rev b{color:#86efac;font-weight:700}
 .pad{padding:22px;text-align:center;color:var(--mute)}
 input{font:inherit;padding:10px 13px;border-radius:11px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--text);width:100%}
 input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.06)}
@@ -3913,19 +3927,35 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
     <div class=tab id=tab-staff>Staff access</div>
   </div>
   <div id=pan-subs>
-    <div class=card><h3>Add time by server ID</h3><p class=hint>For a server the bot isn't in yet, or a custom amount. Positive adds days, negative removes.</p>
-      <div class=frm><input id=cdGuild placeholder="Server (guild) ID"><input id=cdDays placeholder="Days (e.g. 30)" style="max-width:150px" inputmode=numeric><button class="brand-btn" id=cdBtn>Apply</button></div>
+    <div class=toolbar>
+      <input id=subSearch placeholder="Search servers by name or ID…" autocomplete=off>
+      <select id=subSort>
+        <option value=members>Most members</option>
+        <option value=days>Days left</option>
+        <option value=name>Name A–Z</option>
+        <option value=created>Newest server</option>
+      </select>
+      <button class="ghost sm" id=subRefresh>↻ Refresh</button>
     </div>
+    <div class=filters id=subFilters></div>
+    <details class=card style="padding:14px 18px"><summary style="cursor:pointer;font-weight:700;font-size:14px">➕ Add time to a server by ID</summary>
+      <p class=hint style="margin-top:10px">For a server the bot isn't in yet, or a custom amount. Positive adds days, negative removes.</p>
+      <div class=frm><input id=cdGuild placeholder="Server (guild) ID"><input id=cdDays placeholder="Days (e.g. 30)" style="max-width:150px" inputmode=numeric><button class="brand-btn" id=cdBtn>Apply</button></div>
+    </details>
     <div id=subsList></div>
   </div>
   <div id=pan-bans style=display:none>
     <div class=card><h3>Ban a Discord user</h3><p class=hint>A ban is global — the bot ignores them in every server: no commands, buttons, tickets or menus.</p>
       <div class=frm><input id=banId placeholder="Discord user ID"><input id=banReason placeholder="Reason (optional)"><button class="danger" id=banBtn>Ban</button></div>
     </div>
-    <div class=card><div id=bansList></div></div>
+    <div class=card><div class=toolbar style="margin-bottom:4px"><input id=banSearch placeholder="Search bans…" autocomplete=off></div><div id=bansList></div></div>
   </div>
   <div id=pan-shop style=display:none>
-    <div class=card><h3>Shop log</h3><p class=hint>Every purchase, with the email and the IP captured at checkout.</p><div id=shopList></div></div>
+    <div class=card><h3>Shop log</h3><p class=hint>Every purchase, with the email and the IP captured at checkout.</p>
+      <div class=toolbar style="margin-bottom:10px"><input id=shopSearch placeholder="Search email, IP or server…" autocomplete=off></div>
+      <p class=rev id=shopRev></p>
+      <div id=shopList></div>
+    </div>
   </div>
   <div id=pan-staff style=display:none>
     <div class=card><h3>Authorised staff</h3><p class=hint>Staff you authorise here can open this admin site and manage subs, bans and the shop log. Only you (owner) can add or remove them.</p>
@@ -3944,8 +3974,10 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
   function fmtTs(t){if(!t)return '—';try{return new Date(t*1000).toLocaleString()}catch(e){return '—'}}
   function fmtIso(s){if(!s)return '—';try{return new Date(s).toLocaleString()}catch(e){return '—'}}
   function money(c,cur){if(!c)return '—';return (c/100).toFixed(2)+' '+(cur||'')}
-  function idv(name,id){var n=name?esc(name)+' ':'';return n+(id?'<span class=id>'+esc(id)+'</span>':'<span class=mute>—</span>')}
-  var STATE={owner:false};
+  function copyspan(v,cls){if(!v)return '<span class=mute>—</span>';return '<span class="'+(cls||'id')+' copy" data-copy="'+esc(v)+'" title="Click to copy">'+esc(v)+'</span>'}
+  function idv(name,id){var n=name?esc(name)+' ':'';return id?(n+copyspan(id,'id')):(n||'<span class=mute>—</span>')}
+  var STATE={owner:false},SERVERS=[],SHOP=[],BANS=[];
+  var SUBFILTER='all',SUBSORT='members',SUBQ='',SHOPQ='',BANQ='';
   function api(path,method,body){
     var ctrl=new AbortController();var to=setTimeout(function(){ctrl.abort()},12000);
     return fetch(path,{method:method||'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,credentials:'same-origin',signal:ctrl.signal})
@@ -3953,7 +3985,7 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
       .catch(function(){return {ok:false,error:'network'}})
       .then(function(j){clearTimeout(to);return j});
   }
-  function toast(msg,bad){var t=$('#toast');t.textContent=msg;t.className='toast show'+(bad?' bad':'');setTimeout(function(){t.className='toast'},2600)}
+  function toast(msg,bad){var t=$('#toast');t.textContent=msg;t.className='toast show'+(bad?' bad':'');setTimeout(function(){t.className='toast'},2400)}
   function boot(){
     api('/api/admin/me').then(function(me){
       if(!me||!me.authed){showGate('login');return}
@@ -3963,7 +3995,7 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
       STATE.owner=!!me.owner;
       if(STATE.owner)$('#ownerBadge').style.display='';
       $('#gate').style.display='none';$('#app').style.display='';
-      selectTab('subs');loadOverview();
+      selectTab('subs');loadSubs();
     }).catch(function(){showGate('error')});
   }
   function showGate(kind){
@@ -3973,62 +4005,88 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
     else g.innerHTML='<div class=card><div class=big>⚠️</div><h2>Couldn\'t load</h2><p class=mute>Something went wrong. Refresh to try again.</p><a href="/admin"><button class="ghost" style="margin-top:12px">Refresh</button></a></div>';
   }
   function selectTab(id){
-    ['subs','bans','shop','staff'].forEach(function(t){
-      var on=t===id,tab=$('#tab-'+t),pan=$('#pan-'+t);
-      if(tab)tab.classList.toggle('active',on);if(pan)pan.style.display=on?'':'none';
-    });
+    ['subs','bans','shop','staff'].forEach(function(t){var on=t===id,tab=$('#tab-'+t),pan=$('#pan-'+t);if(tab)tab.classList.toggle('active',on);if(pan)pan.style.display=on?'':'none'});
     if(id==='subs')loadSubs();if(id==='bans')loadBans();if(id==='shop')loadShop();if(id==='staff')loadStaff();
   }
-  function loadOverview(){api('/api/admin/overview').then(function(d){if(!d.ok)return;var c=d.counts||{};$('#statServers').textContent=nf(c.servers||0);$('#statActive').textContent=nf(c.active||0);$('#statLife').textContent=nf(c.lifetime||0);$('#statMembers').textContent=nf(c.members||0);$('#statBans').textContent=nf(c.bans||0);$('#statStaff').textContent=nf(c.staff||0)})}
-  function badge(s){if(s.mode==='lifetime'||s.lifetime)return '<span class="badge pur">Lifetime</span>';if(s.active)return '<span class="badge live">Active</span>';if(s.status==='expired')return '<span class="badge red">Expired</span>';return '<span class="badge off">None</span>'}
+  function setStats(c){c=c||{};$('#statServers').textContent=nf(c.servers||0);$('#statActive').textContent=nf(c.active||0);$('#statLife').textContent=nf(c.lifetime||0);$('#statMembers').textContent=nf(c.members||0);$('#statBans').textContent=nf(c.bans||0);$('#statStaff').textContent=nf(c.staff||0)}
+  function bucket(s){if(s.lifetime)return 'lifetime';if(s.active)return 'active';if(s.status==='expired')return 'expired';return 'none'}
+  function badge(s){var b=bucket(s);if(b==='lifetime')return '<span class="badge pur">Lifetime</span>';if(b==='active')return '<span class="badge live">Active</span>';if(b==='expired')return '<span class="badge red">Expired</span>';return '<span class="badge off">Inactive</span>'}
   function expiry(s){if(s.lifetime)return 'Never (lifetime)';if(s.active&&s.days_left!=null)return s.days_left+' days left'+(s.expires_at?' · '+fmtIso(s.expires_at):'');if(s.expires_at)return fmtIso(s.expires_at);return '—'}
+  function kv(k,v){return '<div class=kv><span class=k>'+k+'</span><span class=v>'+v+'</span></div>'}
   function loadSubs(){
-    var box=$('#subsList');box.innerHTML='<div class=pad>Loading…</div>';
+    var box=$('#subsList');if(!SERVERS.length)box.innerHTML='<div class=pad>Loading…</div>';
     api('/api/admin/overview').then(function(d){
       if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}
-      if(!d.servers.length){box.innerHTML='<div class=pad>The bot isn\'t in any servers yet.</div>';return}
-      box.innerHTML=d.servers.map(function(s){
-        var ic=s.icon?'<img src="'+esc(s.icon)+'" alt="">':'';
-        return '<div class=card>'
-          +'<div class=srvhead><div class=srvname>'+ic+esc(s.name)+' '+badge(s)+'</div>'
-          +'<div class=acts>'
-          +'<button class="sm" data-g="'+s.id+'" data-a=add data-d=7>+7d</button>'
-          +'<button class="sm" data-g="'+s.id+'" data-a=add data-d=30>+30d</button>'
-          +'<button class="sm pur" data-g="'+s.id+'" data-a=life>♾ Lifetime</button>'
-          +'<button class="sm danger" data-g="'+s.id+'" data-a=rev>Revoke</button>'
-          +'</div></div>'
-          +'<div class=grid>'
-          +kv('Members',nf(s.members))
-          +kv('Plan',esc(s.plan||'—'))
-          +kv('Expires',esc(expiry(s)))
-          +kv('Server owner',idv(s.owner_name,s.owner_id))
-          +kv('Purchased by',idv(s.purchaser_name,s.purchaser_id))
-          +kv('Server ID','<span class=id>'+esc(s.id)+'</span>')
-          +kv('Stripe customer','<span class=id>'+esc(s.customer_id||'—')+'</span>')
-          +kv('Stripe sub','<span class=id>'+esc(s.sub_id||'—')+'</span>')
-          +kv('Server created',fmtTs(s.created_at))
-          +kv('Sub updated',fmtIso(s.updated_at))
-          +'</div></div>';
-      }).join('');
-      box.querySelectorAll('button[data-a]').forEach(function(b){b.onclick=function(){subAction(b)}});
+      setStats(d.counts);SERVERS=d.servers||[];renderFilters();renderSubs();
     });
   }
-  function kv(k,v){return '<div class=kv><span class=k>'+k+'</span><span class=v>'+v+'</span></div>'}
+  function renderFilters(){
+    var counts={all:SERVERS.length,active:0,lifetime:0,expired:0,none:0};
+    SERVERS.forEach(function(s){counts[bucket(s)]++});
+    var defs=[['all','All'],['active','Active'],['lifetime','Lifetime'],['expired','Expired'],['none','Inactive']];
+    $('#subFilters').innerHTML=defs.map(function(d){return '<div class="fchip'+(SUBFILTER===d[0]?' on':'')+'" data-f="'+d[0]+'">'+d[1]+' <span class=cnt>'+counts[d[0]]+'</span></div>'}).join('');
+    $('#subFilters').querySelectorAll('.fchip').forEach(function(c){c.onclick=function(){SUBFILTER=c.getAttribute('data-f');renderFilters();renderSubs()}});
+  }
+  function renderSubs(){
+    var q=SUBQ.toLowerCase();
+    var list=SERVERS.filter(function(s){if(SUBFILTER!=='all'&&bucket(s)!==SUBFILTER)return false;if(q&&!((s.name||'').toLowerCase().indexOf(q)>=0||String(s.id).indexOf(q)>=0))return false;return true});
+    list.sort(function(a,b){
+      if(SUBSORT==='members')return (b.members||0)-(a.members||0);
+      if(SUBSORT==='name')return (a.name||'').localeCompare(b.name||'');
+      if(SUBSORT==='created')return (b.created_at||0)-(a.created_at||0);
+      var da=a.lifetime?1e9:(a.days_left==null?-1:a.days_left),db=b.lifetime?1e9:(b.days_left==null?-1:b.days_left);return da-db;
+    });
+    var box=$('#subsList');
+    if(!list.length){box.innerHTML='<div class=pad>No servers match.</div>';return}
+    box.innerHTML=list.map(function(s){
+      var ic=s.icon?'<img src="'+esc(s.icon)+'" alt="">':'';
+      return '<div class=card><div class=srvhead><div class=srvname>'+ic+esc(s.name)+' '+badge(s)+'</div>'
+        +'<div class=acts>'
+        +'<button class="sm" data-g="'+s.id+'" data-a=add data-d=7>+7d</button>'
+        +'<button class="sm" data-g="'+s.id+'" data-a=add data-d=30>+30d</button>'
+        +'<button class="sm pur" data-g="'+s.id+'" data-a=life>♾ Lifetime</button>'
+        +'<button class="sm danger" data-g="'+s.id+'" data-a=rev>Revoke</button>'
+        +'</div></div><div class=grid>'
+        +kv('Members',nf(s.members))+kv('Plan',esc(s.plan||'—'))+kv('Expires',esc(expiry(s)))
+        +kv('Server owner',idv(s.owner_name,s.owner_id))+kv('Purchased by',idv(s.purchaser_name,s.purchaser_id))
+        +kv('Server ID',copyspan(s.id,'id'))+kv('Stripe customer',copyspan(s.customer_id,'id'))+kv('Stripe sub',copyspan(s.sub_id,'id'))
+        +kv('Server created',fmtTs(s.created_at))+kv('Sub updated',fmtIso(s.updated_at))
+        +'</div></div>';
+    }).join('');
+    box.querySelectorAll('button[data-a]').forEach(function(b){b.onclick=function(){subAction(b)}});
+  }
   function subAction(b){
     var g=b.getAttribute('data-g'),a=b.getAttribute('data-a'),body,label;
     if(a==='add'){var d=parseInt(b.getAttribute('data-d'),10);body={guild_id:g,action:'add_days',days:d};label='Added '+d+' days';}
     else if(a==='life'){body={guild_id:g,action:'lifetime'};label='Lifetime granted';}
     else{if(!confirm('Revoke this server\'s subscription?'))return;body={guild_id:g,action:'revoke'};label='Revoked';}
     b.disabled=true;
-    api('/api/admin/sub','POST',body).then(function(r){b.disabled=false;if(r.ok){toast(label+' ✓');loadSubs();loadOverview()}else toast(r.error||'Failed',true)});
+    api('/api/admin/sub','POST',body).then(function(r){b.disabled=false;if(r.ok){toast(label+' ✓');loadSubs()}else toast(r.error||'Failed',true)});
   }
-  function customDays(){var g=$('#cdGuild').value.trim(),d=parseInt($('#cdDays').value,10);if(!g){toast('Enter a server ID',true);return}if(!d){toast('Enter days',true);return}api('/api/admin/sub','POST',{guild_id:g,action:'add_days',days:d}).then(function(r){if(r.ok){toast('Done ✓');$('#cdDays').value='';loadSubs();loadOverview()}else toast(r.error||'Failed',true)})}
-  function loadBans(){var box=$('#bansList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/bans').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}if(!d.bans.length){box.innerHTML='<div class=pad>No one is banned.</div>';return}box.innerHTML=d.bans.map(function(b){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(b.name||('ID '+b.id))+'</div><div class=mt><span class=mono>'+esc(b.id)+'</span>'+(b.reason?' · '+esc(b.reason):'')+' · '+fmtTs(b.ts)+'</div></div><button class="sm ghost" data-u="'+esc(b.id)+'">Unban</button></div>'}).join('');box.querySelectorAll('button[data-u]').forEach(function(x){x.onclick=function(){api('/api/admin/unban','POST',{user_id:x.getAttribute('data-u')}).then(function(r){if(r.ok){toast('Unbanned ✓');loadBans();loadOverview()}else toast(r.error||'Failed',true)})}})})}
-  function doBan(){var id=$('#banId').value.trim(),rs=$('#banReason').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/ban','POST',{user_id:id,reason:rs}).then(function(r){if(r.ok){toast('Banned ✓');$('#banId').value='';$('#banReason').value='';loadBans();loadOverview()}else toast(r.error||'Failed',true)})}
-  function loadShop(){var box=$('#shopList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/shop_log').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}if(!d.log.length){box.innerHTML='<div class=pad>No purchases logged yet — they show here after the next sale.</div>';return}box.innerHTML='<table class=tbl><thead><tr><th>When</th><th>Type</th><th>Email</th><th>IP</th><th>Amount</th><th>Server</th></tr></thead><tbody>'+d.log.map(function(e){return '<tr><td>'+fmtTs(e.ts)+'</td><td>'+esc(e.kind||'')+'</td><td class=mono>'+esc(e.email||'—')+'</td><td class=mono>'+esc(e.ip||'—')+'</td><td>'+money(e.amount,e.currency)+'</td><td>'+esc(e.guild_name||e.guild_id||'')+'</td></tr>'}).join('')+'</tbody></table>'})}
-  function loadStaff(){var box=$('#staffList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/staff').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}var canEdit=!!d.owner;$('#staffForm').style.display=canEdit?'':'none';$('#staffOwnerNote').style.display=canEdit?'none':'';if(!d.staff.length){box.innerHTML='<div class=pad>No extra staff authorised — just you.</div>';return}box.innerHTML=d.staff.map(function(s){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(s.name||('ID '+s.id))+'</div><div class=mt><span class=mono>'+esc(s.id)+'</span> · added '+fmtTs(s.ts)+'</div></div>'+(canEdit?'<button class="sm danger" data-s="'+esc(s.id)+'">Remove</button>':'')+'</div>'}).join('');if(canEdit)box.querySelectorAll('button[data-s]').forEach(function(x){x.onclick=function(){api('/api/admin/staff_remove','POST',{user_id:x.getAttribute('data-s')}).then(function(r){if(r.ok){toast('Removed ✓');loadStaff()}else toast(r.error||'Failed',true)})}})})}
-  function addStaff(){var id=$('#staffId').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/staff_add','POST',{user_id:id}).then(function(r){if(r.ok){toast('Authorised ✓');$('#staffId').value='';loadStaff()}else toast(r.error||'Failed',true)})}
-  document.addEventListener('click',function(e){var t=e.target;if(t.id==='tab-subs')selectTab('subs');if(t.id==='tab-bans')selectTab('bans');if(t.id==='tab-shop')selectTab('shop');if(t.id==='tab-staff')selectTab('staff');if(t.id==='banBtn')doBan();if(t.id==='staffBtn')addStaff();if(t.id==='cdBtn')customDays()});
+  function customDays(){var g=$('#cdGuild').value.trim(),d=parseInt($('#cdDays').value,10);if(!g){toast('Enter a server ID',true);return}if(!d){toast('Enter days',true);return}api('/api/admin/sub','POST',{guild_id:g,action:'add_days',days:d}).then(function(r){if(r.ok){toast('Done ✓');$('#cdDays').value='';loadSubs()}else toast(r.error||'Failed',true)})}
+  function loadBans(){var box=$('#bansList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/bans').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}BANS=d.bans||[];renderBans()})}
+  function renderBans(){var box=$('#bansList'),q=BANQ.toLowerCase();var list=BANS.filter(function(b){return !q||(String(b.id).indexOf(q)>=0||(b.name||'').toLowerCase().indexOf(q)>=0||(b.reason||'').toLowerCase().indexOf(q)>=0)});if(!list.length){box.innerHTML='<div class=pad>'+(BANS.length?'No bans match.':'No one is banned.')+'</div>';return}box.innerHTML=list.map(function(b){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(b.name||('ID '+b.id))+'</div><div class=mt>'+copyspan(b.id,'mono')+(b.reason?' · '+esc(b.reason):'')+' · '+fmtTs(b.ts)+'</div></div><button class="sm ghost" data-u="'+esc(b.id)+'">Unban</button></div>'}).join('');box.querySelectorAll('button[data-u]').forEach(function(x){x.onclick=function(){api('/api/admin/unban','POST',{user_id:x.getAttribute('data-u')}).then(function(r){if(r.ok){toast('Unbanned ✓');loadBans();loadSubs()}else toast(r.error||'Failed',true)})}})}
+  function doBan(){var id=$('#banId').value.trim(),rs=$('#banReason').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/ban','POST',{user_id:id,reason:rs}).then(function(r){if(r.ok){toast('Banned ✓');$('#banId').value='';$('#banReason').value='';loadBans();loadSubs()}else toast(r.error||'Failed',true)})}
+  function loadShop(){var box=$('#shopList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/shop_log').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}SHOP=d.log||[];renderShop()})}
+  function renderShop(){
+    var box=$('#shopList'),q=SHOPQ.toLowerCase();
+    var list=SHOP.filter(function(e){return !q||((e.email||'').toLowerCase().indexOf(q)>=0||(e.ip||'').indexOf(q)>=0||(e.guild_name||'').toLowerCase().indexOf(q)>=0||String(e.guild_id||'').indexOf(q)>=0)});
+    var tot={};list.forEach(function(e){if(e.amount){var c=e.currency||'';tot[c]=(tot[c]||0)+e.amount}});
+    var revs=Object.keys(tot).map(function(c){return (tot[c]/100).toFixed(2)+' '+c});
+    $('#shopRev').innerHTML=list.length?('Showing <b>'+list.length+'</b> · total <b>'+(revs.join(' + ')||'—')+'</b>'):'';
+    if(!list.length){box.innerHTML='<div class=pad>'+(SHOP.length?'Nothing matches.':'No purchases logged yet — they show here after the next sale.')+'</div>';return}
+    box.innerHTML='<table class=tbl><thead><tr><th>When</th><th>Type</th><th>Email</th><th>IP</th><th>Amount</th><th>Server</th></tr></thead><tbody>'+list.map(function(e){return '<tr><td>'+fmtTs(e.ts)+'</td><td>'+esc(e.kind||'')+'</td><td>'+copyspan(e.email,'mono')+'</td><td>'+copyspan(e.ip,'mono')+'</td><td>'+money(e.amount,e.currency)+'</td><td>'+esc(e.guild_name||e.guild_id||'')+'</td></tr>'}).join('')+'</tbody></table>';
+  }
+  function loadStaff(){var box=$('#staffList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/staff').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}var canEdit=!!d.owner;$('#staffForm').style.display=canEdit?'':'none';$('#staffOwnerNote').style.display=canEdit?'none':'';if(!d.staff.length){box.innerHTML='<div class=pad>No extra staff authorised — just you.</div>';return}box.innerHTML=d.staff.map(function(s){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(s.name||('ID '+s.id))+'</div><div class=mt>'+copyspan(s.id,'mono')+' · added '+fmtTs(s.ts)+'</div></div>'+(canEdit?'<button class="sm danger" data-s="'+esc(s.id)+'">Remove</button>':'')+'</div>'}).join('');if(canEdit)box.querySelectorAll('button[data-s]').forEach(function(x){x.onclick=function(){api('/api/admin/staff_remove','POST',{user_id:x.getAttribute('data-s')}).then(function(r){if(r.ok){toast('Removed ✓');loadStaff();loadSubs()}else toast(r.error||'Failed',true)})}})})}
+  function addStaff(){var id=$('#staffId').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/staff_add','POST',{user_id:id}).then(function(r){if(r.ok){toast('Authorised ✓');$('#staffId').value='';loadStaff();loadSubs()}else toast(r.error||'Failed',true)})}
+  document.addEventListener('click',function(e){var t=e.target;
+    if(t.id==='tab-subs')selectTab('subs');if(t.id==='tab-bans')selectTab('bans');if(t.id==='tab-shop')selectTab('shop');if(t.id==='tab-staff')selectTab('staff');
+    if(t.id==='banBtn')doBan();if(t.id==='staffBtn')addStaff();if(t.id==='cdBtn')customDays();if(t.id==='subRefresh')loadSubs();
+    if(t.classList&&t.classList.contains('copy')){var v=t.getAttribute('data-copy');try{navigator.clipboard.writeText(v);toast('Copied '+v)}catch(x){toast('Copy failed',true)}}
+  });
+  document.addEventListener('input',function(e){var t=e.target;if(t.id==='subSearch'){SUBQ=t.value;renderSubs()}if(t.id==='shopSearch'){SHOPQ=t.value;renderShop()}if(t.id==='banSearch'){BANQ=t.value;renderBans()}});
+  document.addEventListener('change',function(e){if(e.target.id==='subSort'){SUBSORT=e.target.value;renderSubs()}});
+  document.addEventListener('keydown',function(e){if(e.key!=='Enter')return;var id=e.target.id;if(id==='banId'||id==='banReason')doBan();if(id==='staffId')addStaff();if(id==='cdGuild'||id==='cdDays')customDays()});
   boot();
 })();
 </script></body></html>"""
