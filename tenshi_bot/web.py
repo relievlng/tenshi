@@ -1962,6 +1962,39 @@ async def _h_wars(request):
     return _aioweb.json_response({"wars": _wars_list(store)})
 
 
+async def _h_war_cancel(request):
+    guild = await _req_guild(request)
+    if guild is None:
+        return _aioweb.json_response({"error": "Guild not found."}, status=404)
+    ok, code, msg = await _gate(request, guild)
+    if not ok:
+        return _aioweb.json_response({"error": msg}, status=code)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    enemy = str(body.get("enemy") or "").strip()
+    if not enemy:
+        return _aioweb.json_response({"error": "No war specified."}, status=400)
+    store = guild_store(DATA, guild.id)
+    war = None
+    for w in store.get("wars", []):
+        if str(w.get("enemy", "")).lower() == enemy.lower() and w.get("active", True):
+            war = w
+            break
+    if war is None:
+        return _aioweb.json_response({"error": "No active war against that enemy."}, status=404)
+    war["active"] = False
+    war["cancelled"] = True
+    save_data(DATA)
+    try:  # best-effort: update the war's card in Discord so it stops showing live
+        from . import gang
+        await gang._refresh_war_panel(guild, war)
+    except Exception:  # noqa: BLE001
+        log.exception("war panel refresh after cancel failed")
+    return _aioweb.json_response({"ok": True, "wars": _wars_list(store)})
+
+
 async def _h_orders(request):
     guild = await _req_guild(request)
     if guild is None:
@@ -3836,11 +3869,20 @@ header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px
 .brand{font-family:"Space Grotesk",sans-serif;font-size:19px;font-weight:700;letter-spacing:.5px;background:linear-gradient(90deg,#fff,#e8e8ee 40%,#b9b9c4 70%,#fff);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;flex:1;animation:sheen 6s linear infinite}
 @keyframes sheen{to{background-position:200% center}}
 .brand small{font-family:"Inter";font-weight:500;font-size:12px;color:var(--mute);letter-spacing:0;display:block;margin-top:-2px;-webkit-text-fill-color:var(--mute)}
-.kbtn{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute);border:1px solid var(--line);background:rgba(255,255,255,.04);padding:6px 10px;border-radius:9px;cursor:pointer}
-.kbtn kbd{font-family:inherit;font-size:11px;background:rgba(255,255,255,.1);border-radius:5px;padding:1px 5px}
-.userchip{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);font-size:13px;font-weight:600}
-.userchip img{width:28px;height:28px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.14);display:none}
-.opbadge{font-size:9.5px;font-weight:800;letter-spacing:.8px;padding:3px 7px;border-radius:6px;white-space:nowrap;background:linear-gradient(90deg,#c9c9d2,#fff);color:#111;display:none}
+.kbtn{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--mute);border:1px solid var(--line);background:rgba(255,255,255,.04);padding:8px 13px;border-radius:10px;cursor:pointer;transition:.15s}
+.kbtn:hover{border-color:rgba(255,255,255,.35);color:var(--text);background:rgba(255,255,255,.08)}
+.kbtn .sicon{font-size:15px}
+.kbtn kbd{font-family:inherit;font-size:11px;background:rgba(255,255,255,.1);border-radius:5px;padding:1px 6px;margin-left:2px}
+.userchip{display:flex;align-items:center;gap:10px;padding:5px 7px 5px 5px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);transition:.15s}
+.userchip:hover{border-color:rgba(255,255,255,.25)}
+.uavwrap{position:relative;width:32px;height:32px;flex:none}.uavwrap>*{position:absolute;inset:0;width:32px;height:32px;border-radius:50%}
+.uavwrap .uav{object-fit:cover;box-shadow:0 0 0 2px rgba(255,255,255,.14)}
+.uinitial{display:grid;place-items:center;font-weight:800;font-size:13px;color:#15151b;background:linear-gradient(135deg,#c9c9d2,#fff);box-shadow:0 0 0 2px rgba(255,255,255,.14)}
+.uinfo{display:flex;flex-direction:column;line-height:1.2;padding-right:6px}
+.uname{font-size:13px;font-weight:700;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.urole{font-size:10px;color:var(--mute);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+.urole.owner{background:linear-gradient(90deg,#ffd479,#fff1c2);-webkit-background-clip:text;background-clip:text;color:transparent}
+header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),rgba(130,20,70,.4),transparent)}
 .wrap{max-width:900px;margin:0 auto;padding:20px 18px 70px}
 button{font:inherit;cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);padding:9px 14px;border-radius:11px;transition:.16s ease}
 button:hover{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.1);transform:translateY(-1px)}
@@ -3950,8 +3992,11 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
 <header>
   <div class="logo"><img src="/gm-logo.png" alt="Gang Manager" onerror="this.style.display='none'"></div>
   <div class="brand">GANG MANAGER<small>Admin Control</small></div>
-  <div class="kbtn" id=cmdkOpen>Search <kbd>⌘K</kbd></div>
-  <div class="userchip" id=uchip style=display:none><img id=uav alt=""><span id=uname></span><span class=opbadge id=ownerBadge>OWNER</span></div>
+  <div class="kbtn" id=cmdkOpen><span class=sicon>⌕</span>Search<kbd>⌘K</kbd></div>
+  <div class="userchip" id=uchip style=display:none>
+    <div class=uavwrap><div class=uinitial id=uinitial>·</div><img class=uav id=uav alt=""></div>
+    <div class=uinfo><span class=uname id=uname>Account</span><span class=urole id=urole>Staff</span></div>
+  </div>
   <a href="/logout"><button class="ghost sm">Log out</button></a>
 </header>
 <div id=gate class="wrap gate"></div>
@@ -4024,7 +4069,7 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
   var SUBFILTER='all',SUBSORT='members',SUBQ='',SHOPQ='',BANQ='';
   function api(path,method,body){var ctrl=new AbortController(),to=setTimeout(function(){ctrl.abort()},12000);return fetch(path,{method:method||'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,credentials:'same-origin',signal:ctrl.signal}).then(function(r){return r.json().catch(function(){return {ok:false,error:'bad response'}})}).catch(function(){return {ok:false,error:'network'}}).then(function(j){clearTimeout(to);return j})}
   function toast(msg,bad){var t=$('#toast');t.innerHTML='<span>'+(bad?'⚠️':'✓')+'</span>'+esc(msg);t.className='toast show'+(bad?' bad':'');setTimeout(function(){t.className='toast'},2400)}
-  function boot(){api('/api/admin/me').then(function(me){if(!me||!me.authed){showGate('login');return}var u=me.user||{};if(u.name){$('#uname').textContent=u.name;if(u.avatar){$('#uav').src=u.avatar;$('#uav').style.display=''}$('#uchip').style.display=''}if(!me.access){showGate('denied');return}STATE.owner=!!me.owner;if(STATE.owner)$('#ownerBadge').style.display='';$('#gate').style.display='none';$('#app').style.display='';selectTab('subs');loadSubs()}).catch(function(){showGate('error')})}
+  function boot(){api('/api/admin/me').then(function(me){if(!me||!me.authed){showGate('login');return}if(!me.access){showGate('denied');return}STATE.owner=!!me.owner;var u=me.user||{};$('#uname').textContent=u.name||'Account';$('#uinitial').textContent=initial(u.name);var av=$('#uav');if(u.avatar){av.src=u.avatar;av.onerror=function(){av.style.display='none'}}else{av.style.display='none'}var role=$('#urole');role.textContent=STATE.owner?'Owner':'Staff';role.classList.toggle('owner',STATE.owner);$('#uchip').style.display='';$('#gate').style.display='none';$('#app').style.display='';selectTab('subs');loadSubs()}).catch(function(){showGate('error')})}
   function showGate(kind){$('#app').style.display='none';var g=$('#gate');g.style.display='';if(kind==='login')g.innerHTML='<div class=card><div class=big>🔐</div><h2>Admin sign-in</h2><p class=mute>Log in with a Discord account that owns or is authorised for the bot.</p><a href="/login?next=/admin"><button class="brand-btn" style=margin-top:12px>Log in with Discord</button></a></div>';else if(kind==='denied')g.innerHTML='<div class=card><div class=big>⛔</div><h2>Not authorised</h2><p class=mute>This account isn\'t on the admin list. Ask the owner to authorise your Discord ID.</p><a href="/logout"><button class=ghost style=margin-top:12px>Switch account</button></a></div>';else g.innerHTML='<div class=card><div class=big>⚠️</div><h2>Couldn\'t load</h2><p class=mute>Something went wrong. Refresh to try again.</p><a href="/admin"><button class=ghost style=margin-top:12px>Refresh</button></a></div>'}
   function selectTab(id){curTab=id;['subs','bans','shop','staff'].forEach(function(t){var on=t===id,tab=$('#tab-'+t),pan=$('#pan-'+t);if(tab)tab.classList.toggle('active',on);if(pan)pan.style.display=on?'':'none'});if(id==='subs')loadSubs();if(id==='bans')loadBans();if(id==='shop')loadShop();if(id==='staff')loadStaff()}
   function setStats(c){c=c||{};var map={statServers:c.servers||0,statActive:c.active||0,statLife:c.lifetime||0,statMembers:c.members||0,statBans:c.bans||0,statStaff:c.staff||0};for(var k in map){var el=document.getElementById(k);if(!el)continue;if(firstStats)animateNum(el,map[k]);else el.textContent=nf(map[k])}firstStats=false}
@@ -4354,6 +4399,7 @@ async def start_web_server() -> None:
             _aioweb.post("/api/stash_remove", _h_stash_remove),
             _aioweb.post("/api/stash_scan", _h_stash_scan),
             _aioweb.get("/api/wars", _h_wars),
+            _aioweb.post("/api/war_cancel", _h_war_cancel),
             _aioweb.get("/api/orders", _h_orders),
             _aioweb.post("/api/order_create", _h_order_create),
             _aioweb.post("/api/order_paid", _h_order_paid),
@@ -5282,11 +5328,18 @@ function renderWars(){
         ${rounds?`<div class="wrounds" title="recent rounds (oldest → newest)">${rounds}</div>`:""}</div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:7px">
         <span class="badge ${w.active?'live':'done'}">${w.active?'Live':'Done'}</span>
-        <div class="score" style="color:${col}">${w.wins} – ${w.losses}</div></div></li>`;}).join("")+`</ul>`;}
+        <div class="score" style="color:${col}">${w.wins} – ${w.losses}</div>
+        ${w.active?`<button class="danger warcancel" data-enemy="${h(w.enemy)}" style="padding:5px 11px;font-size:12px">✕ Cancel war</button>`:""}</div></li>`;}).join("")+`</ul>`;
+  document.querySelectorAll('#warsView .warcancel').forEach(b=>b.onclick=()=>cancelWar(b.dataset.enemy));}
 function renderEois(){const es=STATE.eois||[];$("count").textContent=es.length+" pending";
   if(!es.length){$("eoisView").innerHTML=`<div class="empty">No pending applications. 🎉</div>`;return;}
   $("eoisView").innerHTML=`<ul class="members" style="gap:9px">`+es.map(e=>`<li class="member">${e.avatar?`<div class="av"><img src="${h(e.avatar)}" alt=""></div>`:`<div class="av skull" style="background:linear-gradient(135deg,#1a2033,#243154)">📨</div>`}<div class="grow"><div class="mname">${h(e.ign||e.applicant||"Applicant")}</div><div class="muted" style="font-size:12px">${h(e.role||"—")}${e.applicant&&e.applicant!==e.ign?" · "+h(e.applicant):""}</div></div><div style="display:flex;gap:7px;align-items:center">${e.ends?`<span class="badge done" data-ts="${e.ends}"></span>`:""}<span class="badge" style="background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.4)">✅ ${e.yes}</span><span class="badge" style="background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.4)">❌ ${e.no}</span><button style="padding:6px 11px;background:linear-gradient(135deg,#16a34a,#15803d);border:none;color:#fff;font-weight:700;border-radius:11px;cursor:pointer" onclick="acceptEoi('${h(e.id)}','${h(e.ign||e.applicant||"this")}')">Accept</button><button class="danger" style="padding:6px 11px" onclick="closeEoi('${h(e.id)}','${h(e.ign||e.applicant||"this")}')">Close</button></div></li>`).join("")+`</ul>`;
   document.querySelectorAll('#eoisView [data-ts]').forEach(el=>{const t=+el.dataset.ts,sec=t-Math.floor(Date.now()/1000);el.textContent=sec<=0?"closing":"closes "+(sec>86400?Math.round(sec/86400)+"d":sec>3600?Math.round(sec/3600)+"h":Math.max(Math.round(sec/60),1)+"m");});
+}
+async function cancelWar(enemy){
+  if(!confirm("Cancel the war against "+enemy+"? It stops immediately and is marked done."))return;
+  try{const r=await post("/api/war_cancel",{guild:STATE.guild,enemy:enemy});toast("War cancelled","ok");STATE.wars=r.wars;render();}
+  catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 async function closeEoi(id,name){
   if(!confirm("Close voting for "+name+"'s application now? Votes are tallied and the post locks."))return;
@@ -5482,11 +5535,7 @@ function subCardHTML(){
     pill=`<span class="spill bad">${s.status==="expired"?"Expired":"Not subscribed"}</span>`;line="The bot's features are paused in this server until it's subscribed.";
     acts=`<a href="/billing/checkout?guild=${g}"><button class="brand-btn">💳 Subscribe — ${h(price)}</button></a>`;
   }
-  var op="";
-  if(STATE.owner){
-    op=`<div class="opctl"><span>Bot owner tools</span><button onclick="subAdmin('grant30')">+30 days</button><button onclick="subAdmin('lifetime')">♾ Lifetime</button><button onclick="subAdmin('expire')">Expire</button>${st.stripe?`<button onclick="subAdmin('sync')">↻ Sync Stripe</button>`:""}</div>`;
-  }
-  return `<div class="card subcard"><div class="subhead"><div><h3 style="margin:0">💳 Subscription</h3><div class="muted" style="font-size:13px;margin-top:3px">${line}</div></div>${pill}</div>${acts?`<div class="subacts">${acts}</div>`:""}${op}</div>`;
+  return `<div class="card subcard"><div class="subhead"><div><h3 style="margin:0">💳 Subscription</h3><div class="muted" style="font-size:13px;margin-top:3px">${line}</div></div>${pill}</div>${acts?`<div class="subacts">${acts}</div>`:""}</div>`;
 }
 async function subAdmin(action){
   if(action==="expire"&&!confirm("Expire this server's subscription now?"))return;
