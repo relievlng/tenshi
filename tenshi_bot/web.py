@@ -3854,8 +3854,17 @@ _ADMIN_HTML = r"""<!doctype html><html lang=en><head><meta charset=utf-8>
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--text);min-height:100vh;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-body::before{content:"";position:fixed;inset:-20%;z-index:-1;pointer-events:none;background:radial-gradient(1000px 600px at 10% -10%,rgba(255,255,255,.26),transparent 60%),radial-gradient(840px 580px at 104% 0%,rgba(150,24,78,.28),transparent 55%),radial-gradient(720px 720px at 50% 120%,rgba(72,12,44,.36),transparent 62%);animation:drift 22s ease-in-out infinite alternate}
+body::before{content:"";position:fixed;inset:-20%;z-index:-1;pointer-events:none;background:radial-gradient(900px 520px at 12% -8%,rgba(255,255,255,.22),transparent 60%),radial-gradient(760px 520px at 102% 2%,rgba(130,20,70,.20),transparent 55%),radial-gradient(640px 640px at 50% 118%,rgba(60,10,36,.28),transparent 62%);animation:drift 20s ease-in-out infinite alternate}
+body::after{content:"";position:fixed;inset:-40%;z-index:-1;pointer-events:none;opacity:.55;background:conic-gradient(from 0deg at 50% 50%,rgba(255,255,255,.20),rgba(120,20,90,.05),rgba(60,10,44,.18),rgba(255,255,255,.12),rgba(255,255,255,.20));filter:blur(64px);animation:aurora 26s linear infinite}
+.aura{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.aura i{position:absolute;border-radius:50%;filter:blur(80px);opacity:.38;animation:aurafloat 22s ease-in-out infinite}
+.aura i:nth-child(1){width:52vw;height:52vw;left:-12vw;top:-18vw;background:radial-gradient(circle,#5a5a66,transparent 65%)}
+.aura i:nth-child(2){width:44vw;height:44vw;right:-10vw;top:22vh;background:radial-gradient(circle,#8a8a98,transparent 65%);animation-delay:-7s}
+.aura i:nth-child(3){width:60vw;height:60vw;left:20vw;bottom:-30vw;background:radial-gradient(circle,#2e2e38,transparent 65%);animation-delay:-13s}
+@media(prefers-reduced-motion:reduce){.aura i,body::after{animation:none}}
 @keyframes drift{to{transform:translate3d(0,-14px,0) scale(1.04)}}
+@keyframes aurora{to{transform:rotate(360deg)}}
+@keyframes aurafloat{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(4vw,3vh) scale(1.08)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes shimmer{100%{background-position:-200% 0}}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
@@ -3997,6 +4006,7 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
 .confirmbtns{display:flex;gap:10px}.confirmbtns button{flex:1;padding:11px}
 .danger-solid{background:linear-gradient(135deg,#ef4444,#b91c1c) !important;border-color:transparent !important;color:#fff !important;box-shadow:0 8px 24px rgba(239,68,68,.25) !important}
 </style></head><body>
+<div class="aura"><i></i><i></i><i></i></div>
 <header>
   <div class="logo"><img src="/gm-logo.png" alt="Gang Manager" onerror="this.style.display='none'"></div>
   <div class="brand">GANG MANAGER<small>Admin Control</small></div>
