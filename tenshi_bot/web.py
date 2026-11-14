@@ -5067,6 +5067,7 @@ _PAGE_HTML = r"""
   .srvact a{display:inline-flex}
   .srvtag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:6px;
     background:rgba(34,197,94,.16);color:#9fe3b4;margin-right:6px}
+  .srvtag.off{background:rgba(239,68,68,.14);color:#fca5a5}
   .addbtn{white-space:nowrap;font-weight:700;background:linear-gradient(90deg,#c9c9d2,#fff);color:#09090c;border:none}
   .addbtn:hover{background:linear-gradient(90deg,#dcdce4,#fff)}
   .srvempty{padding:18px;border-radius:14px;border:1px dashed var(--line);color:var(--mute);text-align:center;font-size:14px}
@@ -5217,7 +5218,7 @@ function showPicker(me,fromApp){
   var price=((STATE.pub||{}).plan||{}).price||"$7.99 / month";
   var rows=list.map(function(s){
     var status="",action="";
-    if(s.bot_in&&s.access){status=`<span class="srvtag">Active here</span>You manage Gang Manager in this server.`;action=`<button class="addbtn" onclick="openGuild('${h(s.id)}')">Open</button>`;}
+    if(s.bot_in&&s.access){status=s.subscribed?`<span class="srvtag">Active here</span>You manage Gang Manager in this server.`:`<span class="srvtag off">Not subscribed</span>The bot's still here, but this server's subscription has lapsed — open to renew.`;action=`<button class="addbtn" onclick="openGuild('${h(s.id)}')">Open</button>`;}
     else if(s.bot_in){status=`<span class="srvtag">Uses Gang Manager</span>Ask the server owner to add you in Settings → Website access.`;}
     else if(s.can_invite){status=`<span class="srvtag">Subscribed</span>Ready — add the bot to switch everything on.`;action=`<a href="/invite?guild=${h(s.id)}" target="_blank" rel="noopener"><button class="addbtn">➕ Add bot</button></a>`;}
     else if(s.can_add){
