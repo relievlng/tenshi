@@ -45,6 +45,18 @@ __all__ = [
     "subscription_gate",
     "subscription_group",
     "GATE_EXEMPT_PREFIXES",
+    # access control
+    "is_banned",
+    "ban_user",
+    "unban_user",
+    "list_bans",
+    "is_admin_staff",
+    "has_admin_access",
+    "add_admin_staff",
+    "remove_admin_staff",
+    "list_admin_staff",
+    "shop_log_add",
+    "shop_log_list",
 ]
 
 # Plans people can buy. ``days`` is how long one purchase/renewal lasts.
@@ -116,6 +128,134 @@ async def detect_app_owners() -> set[int]:
     _APP_OWNERS.update(ids)
     log.info("Bot operator(s): %s", ", ".join(str(i) for i in sorted(ids | BOT_OWNER_IDS)) or "none found")
     return set(ids)
+
+
+# --------------------------------------------------------------------------- #
+# Access control — global ban list, admin-site staff allowlist, shop log
+# --------------------------------------------------------------------------- #
+
+def _ban_store() -> dict:
+    bans = DATA.get("banned_users")
+    if not isinstance(bans, dict):
+        bans = {}
+        DATA["banned_users"] = bans
+    return bans
+
+
+def is_banned(user_id) -> bool:
+    """True if this Discord user is on the global blocklist."""
+    try:
+        return str(int(user_id)) in _ban_store()
+    except (TypeError, ValueError):
+        return False
+
+
+def ban_user(user_id, *, by=None, name: str = "", reason: str = "") -> bool:
+    try:
+        uid = str(int(user_id))
+    except (TypeError, ValueError):
+        return False
+    _ban_store()[uid] = {
+        "by": str(by) if by else None,
+        "name": name or "",
+        "reason": reason or "",
+        "ts": int(_now().timestamp()),
+    }
+    save_data(DATA)
+    log.info("ban add user=%s by=%s", uid, by)
+    return True
+
+
+def unban_user(user_id) -> bool:
+    uid = str(user_id).strip()
+    bans = _ban_store()
+    if uid in bans:
+        del bans[uid]
+        save_data(DATA)
+        log.info("ban remove user=%s", uid)
+        return True
+    return False
+
+
+def list_bans() -> list:
+    return sorted(
+        [{"id": k, **(v if isinstance(v, dict) else {})} for k, v in _ban_store().items()],
+        key=lambda b: b.get("ts", 0), reverse=True,
+    )
+
+
+def _admin_staff_store() -> dict:
+    staff = DATA.get("admin_staff")
+    if not isinstance(staff, dict):
+        staff = {}
+        DATA["admin_staff"] = staff
+    return staff
+
+
+def is_admin_staff(user_id) -> bool:
+    try:
+        return str(int(user_id)) in _admin_staff_store()
+    except (TypeError, ValueError):
+        return False
+
+
+def has_admin_access(user_id) -> bool:
+    """Who may open the admin site: the bot operator, or an authorised staff id."""
+    return is_owner(user_id) or is_admin_staff(user_id)
+
+
+def add_admin_staff(user_id, *, by=None, name: str = "") -> bool:
+    try:
+        uid = str(int(user_id))
+    except (TypeError, ValueError):
+        return False
+    _admin_staff_store()[uid] = {
+        "by": str(by) if by else None,
+        "name": name or "",
+        "ts": int(_now().timestamp()),
+    }
+    save_data(DATA)
+    return True
+
+
+def remove_admin_staff(user_id) -> bool:
+    uid = str(user_id).strip()
+    staff = _admin_staff_store()
+    if uid in staff:
+        del staff[uid]
+        save_data(DATA)
+        return True
+    return False
+
+
+def list_admin_staff() -> list:
+    return sorted(
+        [{"id": k, **(v if isinstance(v, dict) else {})} for k, v in _admin_staff_store().items()],
+        key=lambda s: s.get("ts", 0), reverse=True,
+    )
+
+
+# Shop log — purchases with email + IP for the admin site (newest first, capped).
+_SHOP_LOG_CAP = 500
+
+
+def _shop_log_store() -> list:
+    lg = DATA.get("shop_log")
+    if not isinstance(lg, list):
+        lg = []
+        DATA["shop_log"] = lg
+    return lg
+
+
+def shop_log_add(entry: dict) -> None:
+    lg = _shop_log_store()
+    lg.insert(0, dict(entry))
+    del lg[_SHOP_LOG_CAP:]
+    save_data(DATA)
+
+
+def shop_log_list(limit: int = 200) -> list:
+    return list(_shop_log_store())[: max(0, int(limit))]
 
 
 # --------------------------------------------------------------------------- #
@@ -400,7 +540,18 @@ async def subscription_gate(interaction: "discord.Interaction") -> bool:
     Exempt: DMs and the setup/subscription/help commands — so an unsubscribed
     server can still check status, set up and subscribe. No-op when billing is
     off. Nobody gets a personal pass, so what you test is what customers get.
+
+    Banned users are blocked first, before any exemption — a ban means the bot
+    ignores them everywhere (commands, buttons, menus), in every server.
     """
+    if is_banned(getattr(interaction.user, "id", 0)):
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "⛔ You're blocked from using this bot.", ephemeral=True)
+        except Exception:  # noqa: BLE001
+            pass
+        return False
     if not BILLING_ENABLED:
         return True
     guild = interaction.guild

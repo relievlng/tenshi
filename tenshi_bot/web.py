@@ -39,6 +39,17 @@ from .billing import (
     note_base_url,
     PLANS,
     DEFAULT_PLAN,
+    is_banned,
+    ban_user,
+    unban_user,
+    list_bans,
+    has_admin_access,
+    is_admin_staff,
+    add_admin_staff,
+    remove_admin_staff,
+    list_admin_staff,
+    shop_log_add,
+    shop_log_list,
 )
 from .settings import CONFIG_SETTINGS, _SETTING_EMOJI, _LOG_KEYS, ensure_log_channels
 
@@ -1595,7 +1606,11 @@ async def _h_login(request):
             "⏳", "Almost ready", "The bot is still starting up — give it a few seconds.",
             "<a class='b p' href='/login'>Try again</a>", 503,
         )
-    return _aioweb.HTTPFound(_authorize_url(request, _make_state()))
+    resp = _aioweb.HTTPFound(_authorize_url(request, _make_state()))
+    nxt = request.query.get("next", "")
+    if nxt.startswith("/") and not nxt.startswith("//"):  # local paths only
+        resp.set_cookie("tenshi_next", nxt, max_age=600, httponly=True, secure=True, samesite="Lax")
+    return resp
 
 
 async def _h_callback(request):
@@ -1643,7 +1658,10 @@ async def _h_callback(request):
                 )
             except (discord.HTTPException, ValueError, KeyError, TypeError):
                 pass
-    resp = _aioweb.HTTPFound("/panel")
+    _nxt = request.cookies.get("tenshi_next", "")
+    _dest = _nxt if (_nxt.startswith("/") and not _nxt.startswith("//")) else "/panel"
+    resp = _aioweb.HTTPFound(_dest)
+    resp.del_cookie("tenshi_next")
     resp.set_cookie(_COOKIE, _sign_session(uid), max_age=43200, httponly=True, secure=True, samesite="Lax")
     resp.del_cookie(_STATE_COOKIE)
     return resp
@@ -3160,6 +3178,7 @@ async def _h_billing_checkout(request):
         ("client_reference_id", str(target_id)),
         ("metadata[guild_id]", str(target_id)),
         ("metadata[purchaser_id]", str(uid)),
+        ("metadata[client_ip]", _client_ip(request)),
         ("subscription_data[metadata][guild_id]", str(target_id)),
         ("subscription_data[metadata][purchaser_id]", str(uid)),
         ("allow_promotion_codes", "true"),
@@ -3324,6 +3343,15 @@ def _dig(obj, *path):
     return cur
 
 
+def _client_ip(request) -> str:
+    """Best-effort client IP. Railway is behind a proxy, so trust the first
+    X-Forwarded-For hop, falling back to the socket peer."""
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        return xff.split(",")[0].strip()[:64]
+    return (request.remote or "")[:64]
+
+
 def _event_meta(obj: dict, key: str):
     """A metadata value from wherever Stripe put it: the object itself, an
     invoice's subscription details (old and new API shapes), or its first line."""
@@ -3437,6 +3465,22 @@ async def _h_billing_webhook(request):
             customer_id=obj.get("customer"), sub_id=sub_id,
             purchaser_id=_event_meta(obj, "purchaser_id"),
         )
+        try:
+            details = obj.get("customer_details") or {}
+            shop_log_add({
+                "ts": int(now.timestamp()),
+                "kind": "purchase" if etype == "checkout.session.completed" else "renewal",
+                "guild_id": str(gid),
+                "email": (details.get("email") or obj.get("customer_email") or "")[:200],
+                "ip": (_event_meta(obj, "client_ip") or "")[:64],
+                "amount": int(obj.get("amount_total") or obj.get("amount_paid") or 0),
+                "currency": (obj.get("currency") or "").upper()[:8],
+                "customer_id": (obj.get("customer") or "")[:64],
+                "purchaser_id": (_event_meta(obj, "purchaser_id") or "")[:32],
+                "session_id": (obj.get("id") or "")[:80],
+            })
+        except Exception:  # noqa: BLE001
+            log.exception("shop log record failed")
         if not was_active:
             await _notify(gid, "💳 Subscription active — Gang Manager is fully unlocked. Thanks!")
     elif etype == "invoice.payment_failed":
@@ -3760,6 +3804,382 @@ async def _h_stats(request):
     return resp
 
 
+# --------------------------------------------------------------------------- #
+# Admin site — owner + authorised staff: subscriptions, bans, shop log, staff
+# --------------------------------------------------------------------------- #
+
+# RAW string on purpose (served byte-for-byte): a plain string would let Python
+# rewrite JS escapes like "\n", which breaks the script. See _PAGE_HTML.
+_ADMIN_HTML = r"""<!doctype html><html lang=en><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Gang Manager — Admin</title>
+<style>
+:root{--bg:#0e0f13;--card:#171920;--card2:#1d2029;--bd:#272a33;--tx:#e7e9ee;--mut:#9aa0ad;--acc:#5865f2;--grn:#23a55a;--red:#da373c;--amb:#f0b232;--pur:#9b6cff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.top{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:rgba(14,15,19,.9);backdrop-filter:blur(8px);z-index:5}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700}
+.brand .dot{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--acc),var(--pur));display:grid;place-items:center;font-size:14px}
+.brand .sub{font-weight:500;color:var(--mut);font-size:12px;margin-left:4px}
+.uchip{display:flex;align-items:center;gap:8px;font-size:14px}
+.uchip img{width:24px;height:24px;border-radius:50%;display:none}
+.ob{font-size:10px;font-weight:700;letter-spacing:.5px;color:#fff;background:linear-gradient(135deg,var(--acc),var(--pur));padding:2px 7px;border-radius:999px;display:none}
+.wrap{max-width:920px;margin:0 auto;padding:18px 16px 60px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:6px 0 18px}
+.stat{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px}
+.stat .n{font-size:26px;font-weight:700}
+.stat .l{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--bd);margin-bottom:16px;flex-wrap:wrap}
+.tab{padding:9px 14px;cursor:pointer;color:var(--mut);font-weight:600;border-bottom:2px solid transparent;user-select:none}
+.tab.on{color:var(--tx);border-bottom-color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:14px}
+.card h3{margin:0 0 4px;font-size:15px}
+.card .hint{color:var(--mut);font-size:13px;margin:0 0 12px}
+.row{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 14px;border:1px solid var(--bd);border-radius:12px;background:var(--card);margin-bottom:8px;flex-wrap:wrap}
+.rname{font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rmeta{color:var(--mut);font-size:12.5px;margin-top:3px}
+.racts{display:flex;gap:6px;flex-wrap:wrap}
+.btn{background:var(--card2);border:1px solid var(--bd);color:var(--tx);padding:8px 12px;border-radius:9px;cursor:pointer;font-weight:600;font-size:13px}
+.btn:hover{border-color:#39415a}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.sm{padding:6px 10px;font-size:12.5px}
+.btn.pri{background:var(--acc);border-color:var(--acc)}
+.btn.pur{background:#2a2140;border-color:#4a3a78;color:#d9ccff}
+.btn.red{background:#2a1618;border-color:#5a2a2e;color:#ffb4b8}
+.b{font-size:10px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:999px}
+.b.grn{background:rgba(35,165,90,.15);color:#5ee29a;border:1px solid rgba(35,165,90,.3)}
+.b.red{background:rgba(218,55,60,.15);color:#ff8f93;border:1px solid rgba(218,55,60,.3)}
+.b.pur{background:rgba(155,108,255,.15);color:#c9b3ff;border:1px solid rgba(155,108,255,.3)}
+.b.gry{background:rgba(154,160,173,.12);color:var(--mut);border:1px solid var(--bd)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--mut)}
+.mut{color:var(--mut)}
+.pad{padding:18px;text-align:center}
+.inp{background:var(--bg);border:1px solid var(--bd);color:var(--tx);padding:9px 12px;border-radius:9px;font-size:14px;width:100%}
+.frm{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.frm .inp{flex:1;min-width:160px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;color:var(--mut);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--bd);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.tbl td{padding:9px 10px;border-bottom:1px solid var(--bd)}
+.mid{max-width:420px;margin:60px auto;text-align:center}
+.mid .big{font-size:40px}
+.mid h2{margin:10px 0 6px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#222633;border:1px solid var(--bd);color:var(--tx);padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:.2s;font-weight:600;font-size:13.5px}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.bad{background:#2a1618;border-color:#5a2a2e;color:#ffb4b8}
+@media(max-width:560px){.stats{grid-template-columns:repeat(3,1fr);gap:8px}.stat{padding:11px}.stat .n{font-size:20px}}
+</style></head><body>
+<div class=top>
+  <div class=brand><span class=dot>GM</span>Gang Manager<span class=sub>Admin</span></div>
+  <div class=uchip id=uchip style=display:none><span class=ob id=ownerBadge>OWNER</span><img id=uav alt=""><span id=uname></span><a class="btn sm" href="/logout" style="margin-left:4px">Logout</a></div>
+</div>
+<div id=gate class=wrap></div>
+<div id=app class=wrap style=display:none>
+  <div class=stats>
+    <div class=stat><div class=n id=statServers>0</div><div class=l>Servers</div></div>
+    <div class=stat><div class=n id=statActive>0</div><div class=l>Active subs</div></div>
+    <div class=stat><div class=n id=statBans>0</div><div class=l>Banned</div></div>
+  </div>
+  <div class=tabs>
+    <div class=tab id=tab-subs>Subscriptions</div>
+    <div class=tab id=tab-bans>Bans</div>
+    <div class=tab id=tab-shop>Shop log</div>
+    <div class=tab id=tab-staff>Staff access</div>
+  </div>
+  <div id=pan-subs>
+    <div class=card><h3>Add time to a server by ID</h3><p class=hint>Use this for a server the bot isn't in yet, or to adjust by a custom amount. Positive adds days, negative removes.</p>
+      <div class=frm><input class=inp id=cdGuild placeholder="Server (guild) ID"><input class=inp id=cdDays placeholder="Days (e.g. 30)" style="max-width:150px" inputmode=numeric><button class="btn pri" id=cdBtn>Apply</button></div>
+    </div>
+    <div id=subsList></div>
+  </div>
+  <div id=pan-bans style=display:none>
+    <div class=card><h3>Ban a Discord user</h3><p class=hint>A ban is global — the bot ignores them in every server: no commands, no tickets, nothing.</p>
+      <div class=frm><input class=inp id=banId placeholder="Discord user ID"><input class=inp id=banReason placeholder="Reason (optional)"><button class="btn red" id=banBtn>Ban</button></div>
+    </div>
+    <div id=bansList></div>
+  </div>
+  <div id=pan-shop style=display:none>
+    <div class=card><h3>Shop log</h3><p class=hint>Every purchase, with the email and IP captured at checkout.</p><div id=shopList></div></div>
+  </div>
+  <div id=pan-staff style=display:none>
+    <div class=card><h3>Authorised staff</h3><p class=hint>Staff you authorise here can open this admin site and manage subs, bans and the shop log. Only you (owner) can add or remove them.</p>
+      <div class=frm id=staffForm style=display:none><input class=inp id=staffId placeholder="Discord user ID to authorise"><button class="btn pri" id=staffBtn>Authorise</button></div>
+      <p class=hint id=staffOwnerNote style=display:none>Only the bot owner can change who has access.</p>
+    </div>
+    <div id=staffList></div>
+  </div>
+</div>
+<div class=toast id=toast></div>
+<script>
+(function(){
+  var $=function(s){return document.querySelector(s)};
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function fmtTs(t){if(!t)return '—';try{return new Date(t*1000).toLocaleString()}catch(e){return '—'}}
+  function money(c,cur){if(!c)return '—';return (c/100).toFixed(2)+' '+(cur||'')}
+  var STATE={owner:false};
+  function api(path,method,body){
+    var ctrl=new AbortController();var to=setTimeout(function(){ctrl.abort()},12000);
+    return fetch(path,{method:method||'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,credentials:'same-origin',signal:ctrl.signal})
+      .then(function(r){return r.json().catch(function(){return {ok:false,error:'bad response'}})})
+      .catch(function(){return {ok:false,error:'network'}})
+      .then(function(j){clearTimeout(to);return j});
+  }
+  function toast(msg,bad){var t=$('#toast');t.textContent=msg;t.className='toast show'+(bad?' bad':'');setTimeout(function(){t.className='toast'},2600)}
+  function boot(){
+    api('/api/admin/me').then(function(me){
+      if(!me||!me.authed){showGate('login');return}
+      var u=me.user||{};
+      if(u.name){$('#uname').textContent=u.name;if(u.avatar){$('#uav').src=u.avatar;$('#uav').style.display=''}$('#uchip').style.display=''}
+      if(!me.access){showGate('denied');return}
+      STATE.owner=!!me.owner;
+      if(STATE.owner)$('#ownerBadge').style.display='';
+      $('#gate').style.display='none';$('#app').style.display='';
+      selectTab('subs');loadOverview();
+    }).catch(function(){showGate('error')});
+  }
+  function showGate(kind){
+    $('#app').style.display='none';var g=$('#gate');g.style.display='';
+    if(kind==='login')g.innerHTML='<div class="card mid"><div class=big>🔐</div><h2>Admin sign-in</h2><p class=mut>Log in with a Discord account that owns or is authorised for the bot.</p><a class="btn pri" href="/login?next=/admin">Log in with Discord</a></div>';
+    else if(kind==='denied')g.innerHTML='<div class="card mid"><div class=big>⛔</div><h2>Not authorised</h2><p class=mut>This account isn\'t on the admin list. Ask the owner to authorise your Discord ID.</p><a class=btn href="/logout">Switch account</a></div>';
+    else g.innerHTML='<div class="card mid"><div class=big>⚠️</div><h2>Couldn\'t load</h2><p class=mut>Something went wrong. Refresh to try again.</p><a class=btn href="/admin">Refresh</a></div>';
+  }
+  function selectTab(id){
+    ['subs','bans','shop','staff'].forEach(function(t){
+      var on=t===id,tab=$('#tab-'+t),pan=$('#pan-'+t);
+      if(tab)tab.classList.toggle('on',on);if(pan)pan.style.display=on?'':'none';
+    });
+    if(id==='subs')loadSubs();if(id==='bans')loadBans();if(id==='shop')loadShop();if(id==='staff')loadStaff();
+  }
+  function loadOverview(){api('/api/admin/overview').then(function(d){if(!d.ok)return;var c=d.counts||{};$('#statServers').textContent=c.servers||0;$('#statActive').textContent=c.active||0;$('#statBans').textContent=c.bans||0})}
+  function badge(s){if(s.mode==='lifetime'||s.lifetime)return '<span class="b pur">LIFETIME</span>';if(s.active)return '<span class="b grn">ACTIVE</span>';if(s.status==='expired')return '<span class="b red">EXPIRED</span>';return '<span class="b gry">NONE</span>'}
+  function loadSubs(){
+    var box=$('#subsList');box.innerHTML='<div class="mut pad">Loading…</div>';
+    api('/api/admin/overview').then(function(d){
+      if(!d.ok){box.innerHTML='<div class="mut pad">Could not load.</div>';return}
+      if(!d.servers.length){box.innerHTML='<div class="mut pad">The bot isn\'t in any servers yet.</div>';return}
+      box.innerHTML=d.servers.map(function(s){
+        var sub=s.lifetime?'Lifetime':(s.active?(s.days_left!=null?s.days_left+' days left':'active'):(s.status||'none'));
+        return '<div class=row><div class=rmain><div class=rname>'+esc(s.name)+' '+badge(s)+'</div>'
+          +'<div class=rmeta>'+Number(s.members).toLocaleString()+' members · '+esc(sub)+' · <span class=mono>'+esc(s.id)+'</span></div></div>'
+          +'<div class=racts>'
+          +'<button class="btn sm" data-g="'+s.id+'" data-a=add data-d=7>+7d</button>'
+          +'<button class="btn sm" data-g="'+s.id+'" data-a=add data-d=30>+30d</button>'
+          +'<button class="btn sm pur" data-g="'+s.id+'" data-a=life>♾ Lifetime</button>'
+          +'<button class="btn sm red" data-g="'+s.id+'" data-a=rev>Revoke</button>'
+          +'</div></div>';
+      }).join('');
+      box.querySelectorAll('button[data-a]').forEach(function(b){b.onclick=function(){subAction(b)}});
+    });
+  }
+  function subAction(b){
+    var g=b.getAttribute('data-g'),a=b.getAttribute('data-a'),body,label;
+    if(a==='add'){var d=parseInt(b.getAttribute('data-d'),10);body={guild_id:g,action:'add_days',days:d};label='Added '+d+' days';}
+    else if(a==='life'){body={guild_id:g,action:'lifetime'};label='Lifetime granted';}
+    else{if(!confirm('Revoke this server\'s subscription?'))return;body={guild_id:g,action:'revoke'};label='Revoked';}
+    b.disabled=true;
+    api('/api/admin/sub','POST',body).then(function(r){b.disabled=false;if(r.ok){toast(label+' ✓');loadSubs();loadOverview()}else toast(r.error||'Failed',true)});
+  }
+  function customDays(){var g=$('#cdGuild').value.trim(),d=parseInt($('#cdDays').value,10);if(!g){toast('Enter a server ID',true);return}if(!d){toast('Enter days',true);return}api('/api/admin/sub','POST',{guild_id:g,action:'add_days',days:d}).then(function(r){if(r.ok){toast('Done ✓');$('#cdDays').value='';loadSubs();loadOverview()}else toast(r.error||'Failed',true)})}
+  function loadBans(){var box=$('#bansList');box.innerHTML='<div class="mut pad">Loading…</div>';api('/api/admin/bans').then(function(d){if(!d.ok){box.innerHTML='<div class="mut pad">Could not load.</div>';return}if(!d.bans.length){box.innerHTML='<div class="mut pad">No one is banned.</div>';return}box.innerHTML=d.bans.map(function(b){return '<div class=row><div class=rmain><div class=rname>'+esc(b.name||('ID '+b.id))+'</div><div class=rmeta><span class=mono>'+esc(b.id)+'</span>'+(b.reason?' · '+esc(b.reason):'')+' · '+fmtTs(b.ts)+'</div></div><div class=racts><button class="btn sm" data-u="'+esc(b.id)+'">Unban</button></div></div>'}).join('');box.querySelectorAll('button[data-u]').forEach(function(x){x.onclick=function(){api('/api/admin/unban','POST',{user_id:x.getAttribute('data-u')}).then(function(r){if(r.ok){toast('Unbanned ✓');loadBans();loadOverview()}else toast(r.error||'Failed',true)})}})})}
+  function doBan(){var id=$('#banId').value.trim(),rs=$('#banReason').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/ban','POST',{user_id:id,reason:rs}).then(function(r){if(r.ok){toast('Banned ✓');$('#banId').value='';$('#banReason').value='';loadBans();loadOverview()}else toast(r.error||'Failed',true)})}
+  function loadShop(){var box=$('#shopList');box.innerHTML='<div class="mut pad">Loading…</div>';api('/api/admin/shop_log').then(function(d){if(!d.ok){box.innerHTML='<div class="mut pad">Could not load.</div>';return}if(!d.log.length){box.innerHTML='<div class="mut pad">No purchases logged yet — they show here after the next sale.</div>';return}box.innerHTML='<table class=tbl><thead><tr><th>When</th><th>Type</th><th>Email</th><th>IP</th><th>Amount</th><th>Server</th></tr></thead><tbody>'+d.log.map(function(e){return '<tr><td>'+fmtTs(e.ts)+'</td><td>'+esc(e.kind||'')+'</td><td class=mono>'+esc(e.email||'—')+'</td><td class=mono>'+esc(e.ip||'—')+'</td><td>'+money(e.amount,e.currency)+'</td><td>'+esc(e.guild_name||e.guild_id||'')+'</td></tr>'}).join('')+'</tbody></table>'})}
+  function loadStaff(){var box=$('#staffList');box.innerHTML='<div class="mut pad">Loading…</div>';api('/api/admin/staff').then(function(d){if(!d.ok){box.innerHTML='<div class="mut pad">Could not load.</div>';return}var canEdit=!!d.owner;$('#staffForm').style.display=canEdit?'':'none';$('#staffOwnerNote').style.display=canEdit?'none':'';if(!d.staff.length){box.innerHTML='<div class="mut pad">No extra staff authorised — just you.</div>';return}box.innerHTML=d.staff.map(function(s){return '<div class=row><div class=rmain><div class=rname>'+esc(s.name||('ID '+s.id))+'</div><div class=rmeta><span class=mono>'+esc(s.id)+'</span> · added '+fmtTs(s.ts)+'</div></div><div class=racts>'+(canEdit?'<button class="btn sm red" data-s="'+esc(s.id)+'">Remove</button>':'')+'</div></div>'}).join('');if(canEdit)box.querySelectorAll('button[data-s]').forEach(function(x){x.onclick=function(){api('/api/admin/staff_remove','POST',{user_id:x.getAttribute('data-s')}).then(function(r){if(r.ok){toast('Removed ✓');loadStaff()}else toast(r.error||'Failed',true)})}})})}
+  function addStaff(){var id=$('#staffId').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/staff_add','POST',{user_id:id}).then(function(r){if(r.ok){toast('Authorised ✓');$('#staffId').value='';loadStaff()}else toast(r.error||'Failed',true)})}
+  document.addEventListener('click',function(e){var t=e.target;if(t.id==='tab-subs')selectTab('subs');if(t.id==='tab-bans')selectTab('bans');if(t.id==='tab-shop')selectTab('shop');if(t.id==='tab-staff')selectTab('staff');if(t.id==='banBtn')doBan();if(t.id==='staffBtn')addStaff();if(t.id==='cdBtn')customDays()});
+  boot();
+})();
+</script></body></html>"""
+
+
+def _admin_json(payload, status: int = 200):
+    return _aioweb.json_response(payload, status=status,
+                                headers={"Cache-Control": "no-store, max-age=0"})
+
+
+def _admin_ctx(request):
+    """(uid, owner_flag) when the requester may use the admin site, else (None, False)."""
+    uid = _read_session(request.cookies.get(_COOKIE))
+    if not uid or not has_admin_access(uid):
+        return None, False
+    return uid, is_owner(uid)
+
+
+def _user_label(uid) -> str:
+    try:
+        u = bot.get_user(int(uid))
+    except (TypeError, ValueError):
+        return ""
+    return str(u) if u else ""
+
+
+async def _h_admin(request):
+    return _aioweb.Response(text=_ADMIN_HTML, content_type="text/html",
+                            headers={"Cache-Control": "no-store, max-age=0"})
+
+
+async def _h_admin_me(request):
+    brand = _brand_info()
+    uid = _read_session(request.cookies.get(_COOKIE))
+    if not uid:
+        return _admin_json({"authed": False, "reason": "login", "brand": brand})
+    prof = _cached_profile(uid) or {}
+    if not has_admin_access(uid):
+        return _admin_json({"authed": True, "access": False, "user": prof, "brand": brand})
+    return _admin_json({"authed": True, "access": True, "owner": is_owner(uid),
+                        "user": prof, "brand": brand})
+
+
+async def _h_admin_overview(request):
+    uid, owner = _admin_ctx(request)
+    if uid is None:
+        return _admin_json({"ok": False, "error": "forbidden"}, 403)
+    servers = []
+    active = 0
+    for g in sorted(bot.guilds, key=lambda x: (x.member_count or 0), reverse=True):
+        st = effective_state(g.id)
+        if st.get("active"):
+            active += 1
+        servers.append({
+            "id": str(g.id), "name": g.name, "members": g.member_count or 0,
+            "icon": (g.icon.url if g.icon else None),
+            "mode": st.get("mode"), "active": bool(st.get("active")),
+            "status": st.get("status"), "lifetime": bool(st.get("lifetime")),
+            "days_left": st.get("days_left"), "expires_at": st.get("expires_at"),
+            "customer_id": st.get("customer_id") or "", "sub_id": st.get("sub_id") or "",
+        })
+    return _admin_json({"ok": True, "owner": owner, "servers": servers,
+                        "counts": {"servers": len(servers), "active": active,
+                                   "bans": len(list_bans())}})
+
+
+async def _h_admin_sub(request):
+    uid, owner = _admin_ctx(request)
+    if uid is None:
+        return _admin_json({"ok": False, "error": "forbidden"}, 403)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return _admin_json({"ok": False, "error": "bad json"}, 400)
+    try:
+        gid = int(body.get("guild_id"))
+    except (TypeError, ValueError):
+        return _admin_json({"ok": False, "error": "bad guild"}, 400)
+    action = str(body.get("action") or "")
+    if action == "add_days":
+        try:
+            days = int(body.get("days"))
+        except (TypeError, ValueError):
+            return _admin_json({"ok": False, "error": "bad days"}, 400)
+        if days == 0:
+            return _admin_json({"ok": False, "error": "days can't be 0"}, 400)
+        days = max(-3650, min(3650, days))
+        st = grant(gid, days=days, plan=DEFAULT_PLAN, status="active")
+    elif action == "lifetime":
+        st = grant(gid, lifetime=True, plan=DEFAULT_PLAN, status="active")
+    elif action == "revoke":
+        st = expire(gid)
+    else:
+        return _admin_json({"ok": False, "error": "unknown action"}, 400)
+    log.info("admin sub action=%s guild=%s by=%s", action, gid, uid)
+    return _admin_json({"ok": True, "state": {k: st.get(k) for k in
+                       ("active", "mode", "status", "days_left", "expires_at", "lifetime")}})
+
+
+async def _h_admin_bans(request):
+    uid, owner = _admin_ctx(request)
+    if uid is None:
+        return _admin_json({"ok": False, "error": "forbidden"}, 403)
+    bans = [{**b, "name": b.get("name") or _user_label(b.get("id"))} for b in list_bans()]
+    return _admin_json({"ok": True, "bans": bans})
+
+
+async def _h_admin_ban(request):
+    uid, owner = _admin_ctx(request)
+    if uid is None:
+        return _admin_json({"ok": False, "error": "forbidden"}, 403)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return _admin_json({"ok": False, "error": "bad json"}, 400)
+    raw = str(body.get("user_id") or "").strip()
+    try:
+        tid = int(raw)
+    except (TypeError, ValueError):
+        return _admin_json({"ok": False, "error": "That isn't a valid Discord ID."}, 400)
+    if is_owner(tid):
+        return _admin_json({"ok": False, "error": "You can't ban a bot operator."}, 400)
+    ban_user(tid, by=uid, name=_user_label(tid), reason=str(body.get("reason") or "")[:200])
+    return _admin_json({"ok": True})
+
+
+async def _h_admin_unban(request):
+    uid, owner = _admin_ctx(request)
+    if uid is None:
+        return _admin_json({"ok": False, "error": "forbidden"}, 403)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return _admin_json({"ok": False, "error": "bad json"}, 400)
+    unban_user(str(body.get("user_id") or "").strip())
+    return _admin_json({"ok": True})
+
+
+async def _h_admin_staff(request):
+    uid, owner = _admin_ctx(request)
+    if uid is None:
+        return _admin_json({"ok": False, "error": "forbidden"}, 403)
+    staff = []
+    for s in list_admin_staff():
+        prof = _cached_profile(s.get("id")) or {}
+        staff.append({**s, "name": s.get("name") or prof.get("name") or ""})
+    return _admin_json({"ok": True, "owner": owner, "staff": staff})
+
+
+async def _h_admin_staff_add(request):
+    uid, owner = _admin_ctx(request)
+    if uid is None or not owner:
+        return _admin_json({"ok": False, "error": "Only the bot owner can manage staff."}, 403)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return _admin_json({"ok": False, "error": "bad json"}, 400)
+    raw = str(body.get("user_id") or "").strip()
+    try:
+        tid = int(raw)
+    except (TypeError, ValueError):
+        return _admin_json({"ok": False, "error": "That isn't a valid Discord ID."}, 400)
+    add_admin_staff(tid, by=uid, name=_user_label(tid))
+    return _admin_json({"ok": True})
+
+
+async def _h_admin_staff_remove(request):
+    uid, owner = _admin_ctx(request)
+    if uid is None or not owner:
+        return _admin_json({"ok": False, "error": "Only the bot owner can manage staff."}, 403)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return _admin_json({"ok": False, "error": "bad json"}, 400)
+    remove_admin_staff(str(body.get("user_id") or "").strip())
+    return _admin_json({"ok": True})
+
+
+async def _h_admin_shop_log(request):
+    uid, owner = _admin_ctx(request)
+    if uid is None:
+        return _admin_json({"ok": False, "error": "forbidden"}, 403)
+    rows = []
+    for e in shop_log_list(300):
+        gname = ""
+        try:
+            g = bot.get_guild(int(e.get("guild_id")))
+            gname = g.name if g else ""
+        except (TypeError, ValueError):
+            pass
+        rows.append({**e, "guild_name": gname})
+    return _admin_json({"ok": True, "log": rows})
+
+
 async def start_web_server() -> None:
     """Start the roster web server if PORT is configured. Safe to call once in
     on_ready; a no-op (with a log line) when disabled or aiohttp.web is absent."""
@@ -3833,6 +4253,17 @@ async def start_web_server() -> None:
             _aioweb.post("/api/web_member_remove", _h_web_member_remove),
             _aioweb.post("/api/logs_setup", _h_logs_setup),
             _aioweb.post("/api/sub_admin", _h_sub_admin),
+            _aioweb.get("/admin", _h_admin),
+            _aioweb.get("/api/admin/me", _h_admin_me),
+            _aioweb.get("/api/admin/overview", _h_admin_overview),
+            _aioweb.post("/api/admin/sub", _h_admin_sub),
+            _aioweb.get("/api/admin/bans", _h_admin_bans),
+            _aioweb.post("/api/admin/ban", _h_admin_ban),
+            _aioweb.post("/api/admin/unban", _h_admin_unban),
+            _aioweb.get("/api/admin/staff", _h_admin_staff),
+            _aioweb.post("/api/admin/staff_add", _h_admin_staff_add),
+            _aioweb.post("/api/admin/staff_remove", _h_admin_staff_remove),
+            _aioweb.get("/api/admin/shop_log", _h_admin_shop_log),
         ]
     )
     runner = _aioweb.AppRunner(app)
