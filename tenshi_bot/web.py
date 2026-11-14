@@ -1623,6 +1623,13 @@ async def _h_callback(request):
             "⚠️", "Discord stopped the login",
             f"Discord said <code>{html.escape(err)}</code>. Please try again.", _RETRY, 400,
         )
+    # Returning from an "add the bot" authorization: our invite link carries
+    # response_type=code + the /callback redirect_uri, so Discord appends guild_id
+    # here once the bot is added. The user is already signed in, so skip the login
+    # exchange and drop them back on the panel, focused on that server.
+    added_gid = request.query.get("guild_id")
+    if added_gid and added_gid.isdigit():
+        return _aioweb.HTTPFound(f"/panel?added={added_gid}")
     if not _state_ok(request.query.get("state")):
         return _simple_page(
             "⏳", "That login link expired",
@@ -2414,8 +2421,11 @@ def _invite_perms() -> str:
     return raw if raw.isdigit() else str(_DEFAULT_INVITE_PERMS)
 
 
-def _invite_url(guild_id: str | None = None) -> str:
-    """Bot invite link. With a guild id, Discord pre-selects that server."""
+def _invite_url(guild_id: str | None = None, redirect_uri: str | None = None) -> str:
+    """Bot invite link. With a guild id, Discord pre-selects that server. With a
+    redirect_uri (which must be listed under OAuth2 → Redirects — we reuse the
+    login /callback), Discord sends the user back there with guild_id after they
+    add the bot, instead of its terminal 'you may close this tab' page."""
     cid = _client_id()
     if not cid:
         return ""
@@ -2429,6 +2439,9 @@ def _invite_url(guild_id: str | None = None) -> str:
     if guild_id and str(guild_id).isdigit():
         params["guild_id"] = str(guild_id)
         params["disable_guild_select"] = "true"
+    if redirect_uri:
+        params["response_type"] = "code"
+        params["redirect_uri"] = redirect_uri
     return f"{_OAUTH_AUTHORIZE}?{urlencode(params)}"
 
 
@@ -2559,7 +2572,7 @@ async def _h_invite(request):
                 "added. Just paid? This unlocks by itself in a few seconds.",
                 _await_active_actions(gid, subscribe=True),
             )
-    url = _invite_url(gid if gid.isdigit() else None)
+    url = _invite_url(gid if gid.isdigit() else None, redirect_uri=_redirect_uri(request))
     if not url:
         return _simple_page(
             "⏳", "Almost ready", "The bot is still starting up — try again in a few seconds.",
@@ -5307,6 +5320,9 @@ async function boot(){
     var wantPicker=location.hash==="#servers";
     if(wantPicker){try{history.replaceState(null,"",location.pathname);}catch(e){}}
     if(wantPicker&&Array.isArray(me.servers)){showPicker(me,true);return;}
+    // just came back from adding the bot (/callback -> /panel?added=<id>): open that server
+    var addedG="";try{addedG=new URLSearchParams(location.search).get("added")||"";}catch(e){}
+    if(addedG){try{history.replaceState(null,"",location.pathname);}catch(e){}STATE.prefGuild=addedG;}
     var active=(me.guilds||[]).filter(x=>!(x.subscription&&x.subscription.billing_enabled)||x.subscription.active);
     var pref=STATE.prefGuild&&(me.guilds||[]).find(x=>x.id===STATE.prefGuild);STATE.prefGuild=null;
     var def=((pref||active[0]||me.guilds[0])||{}).id||"";
