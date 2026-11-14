@@ -4833,6 +4833,21 @@ _PAGE_HTML = r"""
   .toast.err{border-color:rgba(239,68,68,.5);background:rgba(42,16,16,.92)}
   @keyframes toastin{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
   @media(max-width:560px){#toasts{left:14px;right:14px;max-width:none}}
+
+  /* in-site confirm dialog (replaces native confirm()) */
+  .confirm{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;padding:20px;
+    background:rgba(4,4,8,.66);backdrop-filter:blur(5px);opacity:0;transition:opacity .16s}
+  .confirm.show{display:flex;opacity:1}
+  .confirmbox{width:100%;max-width:400px;background:rgba(18,18,24,.98);border:1px solid rgba(255,255,255,.14);
+    border-radius:20px;padding:26px 24px 22px;text-align:center;box-shadow:0 40px 110px rgba(0,0,0,.65);
+    transform:translateY(12px) scale(.97);transition:.22s cubic-bezier(.2,.7,.2,1)}
+  .confirm.show .confirmbox{transform:none}
+  .confirmbox .ci2{font-size:34px;line-height:1;margin-bottom:10px}
+  .confirmbox h4{margin:0 0 8px;font-size:18px;font-weight:800;letter-spacing:-.2px}
+  .confirmbox p{margin:0 0 20px;color:var(--mute);font-size:14px;line-height:1.55}
+  .confirmbtns{display:flex;gap:10px;justify-content:center}
+  .confirmbtns button{flex:1;max-width:170px;padding:11px 16px;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer}
+  .danger-solid{background:linear-gradient(135deg,#ef4444,#b91c1c)!important;border-color:transparent!important;color:#fff!important}
   footer{color:var(--mute);font-size:12px;text-align:center;padding:30px 18px}
 
   .banner{padding:12px 15px;border-radius:13px;margin-bottom:14px;font-size:14px;border:1px solid var(--line);background:rgba(20,20,26,.7)}
@@ -5040,14 +5055,16 @@ _PAGE_HTML = r"""
   .gaterow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
   .srvlist{display:flex;flex-direction:column;gap:10px;margin:20px 0 6px;text-align:left;max-height:46vh;overflow:auto;padding:2px}
   .srv{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;border:1px solid var(--line);
-    background:rgba(255,255,255,.04);transition:.18s}
+    background:rgba(255,255,255,.04);transition:.18s;flex-wrap:wrap;row-gap:10px}
   .srv:hover{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.07);transform:translateY(-1px)}
   .srvic{width:44px;height:44px;border-radius:14px;flex:none;overflow:hidden;display:grid;place-items:center;
     background:linear-gradient(135deg,#2a2a33,#15151b);font-weight:800;font-size:18px;color:#e8e8ee}
   .srvic img{width:100%;height:100%;object-fit:cover}
-  .srvmeta{flex:1;min-width:0}
+  .srvmeta{flex:1 1 170px;min-width:0}
   .srvmeta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .srvmeta small{display:block;color:var(--mute);font-size:12.5px;line-height:1.45;margin-top:2px}
+  .srvact{display:flex;gap:8px;align-items:center;flex:0 0 auto;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+  .srvact a{display:inline-flex}
   .srvtag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:2px 7px;border-radius:6px;
     background:rgba(34,197,94,.16);color:#9fe3b4;margin-right:6px}
   .addbtn{white-space:nowrap;font-weight:700;background:linear-gradient(90deg,#c9c9d2,#fff);color:#09090c;border:none}
@@ -5083,6 +5100,8 @@ _PAGE_HTML = r"""
 </header>
 
 <div id="toasts"></div>
+
+<div class="confirm" id="confirmModal"><div class="confirmbox"><div class="ci2" id="confirmIcon">⚠️</div><h4 id="confirmTitle">Are you sure?</h4><p id="confirmMsg"></p><div class="confirmbtns"><button class="ghost" id="confirmCancel">Cancel</button><button class="brand-btn" id="confirmOk">Confirm</button></div></div></div>
 
 <div id="gate" class="gate" style="display:none">
   <div class="logo hasimg"><img src="/gm-logo.png" alt="Gang Manager"></div>
@@ -5140,6 +5159,25 @@ function toast(text,kind){
   $("toasts").appendChild(t);
   setTimeout(()=>{t.style.transition="opacity .3s";t.style.opacity="0";setTimeout(()=>t.remove(),300);},3800);
 }
+function confirmBox(o){
+  o=o||{};
+  var m=$("confirmModal");
+  if(!m)return Promise.resolve(window.confirm(o.message||o.title||"Are you sure?"));
+  $("confirmIcon").textContent=o.icon||"⚠️";
+  $("confirmTitle").textContent=o.title||"Are you sure?";
+  $("confirmMsg").textContent=o.message||"";
+  var ok=$("confirmOk");ok.textContent=o.confirmText||"Confirm";ok.className=o.danger?"danger-solid":"brand-btn";
+  var cancel=$("confirmCancel");
+  m.classList.add("show");setTimeout(()=>{try{ok.focus();}catch(e){}},30);
+  return new Promise(resolve=>{
+    function close(v){m.classList.remove("show");ok.onclick=cancel.onclick=m.onclick=null;document.removeEventListener("keydown",onkey);resolve(v);}
+    function onkey(e){if(e.key==="Escape")close(false);else if(e.key==="Enter")close(true);}
+    ok.onclick=()=>close(true);
+    cancel.onclick=()=>close(false);
+    m.onclick=e=>{if(e.target===m)close(false);};
+    document.addEventListener("keydown",onkey);
+  });
+}
 async function api(path,opts){
   const r=await fetch(path,opts||{});
   let d={};try{d=await r.json();}catch(e){}
@@ -5187,7 +5225,7 @@ function showPicker(me,fromApp){
       else{status=`Step 1: subscribe (${h(price)}) · Step 2: add the bot`;action=`<a href="/billing/checkout?guild=${h(s.id)}"><button class="addbtn">💳 Subscribe</button></a>`;}
     }
     else{status="Runs Gang Manager";}
-    return `<div class="srv"><div class="srvic">${srvIcon(s)}</div><div class="srvmeta"><b>${h(s.name)}</b><small>${status}</small></div>${action}</div>`;
+    return `<div class="srv"><div class="srvic">${srvIcon(s)}</div><div class="srvmeta"><b>${h(s.name)}</b><small>${status}</small></div><div class="srvact">${action}</div></div>`;
   }).join("");
   var empty=`<div class="srvempty">No servers to show yet. Create a Discord server (or ask a server owner to add you), then refresh.</div>`;
   var u=me.user||{};
@@ -5204,7 +5242,7 @@ function openPicker(){
 function openGuild(id){STATE.prefGuild=id;boot();}
 async function moveSub(gid){
   var mf=STATE.moveFrom; if(!mf||mf.id===gid) return;
-  if(!confirm("Move your subscription from "+mf.name+" to this server?\n\n"+mf.name+" will stop using Gang Manager — you can move it back any time."))return;
+  if(!await confirmBox({icon:"🔄",title:"Move subscription?",message:mf.name+" will stop using Gang Manager and this server takes over — you can move it back any time.",confirmText:"Move it here"}))return;
   try{
     var r=await post("/api/sub_move",{guild:gid});
     toast(r.moved_from?("Moved from "+r.moved_from+" ✓"):"Subscription moved ✓","ok");
@@ -5410,12 +5448,12 @@ function renderStrikes(){
   }).join("")+`</ul>`;
 }
 async function removeStrike(id,name){
-  if(!confirm("Remove strike #"+id+" from "+name+"?"))return;
+  if(!await confirmBox({icon:"⚠️",title:"Remove strike?",message:"Remove strike #"+id+" from "+name+".",confirmText:"Remove",danger:true}))return;
   try{await post("/api/strike_remove",{guild:STATE.guild,strike_id:id});toast("Removed strike #"+id,"ok");await reload();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 async function clearStrikes(uid,name){
-  if(!confirm("Clear ALL strikes from "+name+"? This can't be undone."))return;
+  if(!await confirmBox({icon:"🧹",title:"Clear all strikes?",message:"Remove every strike from "+name+". This can't be undone.",confirmText:"Clear all",danger:true}))return;
   try{const r=await post("/api/strike_clear",{guild:STATE.guild,user_id:uid});toast("Cleared "+(r.cleared||0)+" strike"+((r.cleared||0)===1?"":"s")+" from "+name,"ok");await reload();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
@@ -5430,14 +5468,14 @@ async function addRole(uid,rid,sel){
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 async function removeMember(uid,name){
-  if(!confirm("Remove "+name+" from the roster and take ALL their gang roles off in Discord?"))return;
+  if(!await confirmBox({icon:"🚪",title:"Remove from roster?",message:"Remove "+name+" from the roster and take ALL their gang roles off in Discord?",confirmText:"Remove",danger:true}))return;
   try{const r=await post("/api/remove",{guild:STATE.guild,user_id:uid});
     const f=(r.failed_roles||[]).length?" · couldn't remove: "+r.failed_roles.join(", "):"";
     toast("Removed "+name+(r.removed_roles?.length?" ("+r.removed_roles.join(", ")+")":"")+f,f?"err":"ok");await reload();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 async function removeKos(uid,name){
-  if(!confirm("Take "+name+" off the KOS list and remove the KOS role?"))return;
+  if(!await confirmBox({icon:"🎯",title:"Remove from KOS?",message:"Take "+name+" off the KOS list and remove the KOS role?",confirmText:"Remove",danger:true}))return;
   try{await post("/api/kos_remove",{guild:STATE.guild,user_id:uid});toast("Took "+name+" off KOS","ok");await reload();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
@@ -5516,17 +5554,17 @@ function renderEois(){const es=STATE.eois||[];$("count").textContent=es.length+"
   document.querySelectorAll('#eoisView [data-ts]').forEach(el=>{const t=+el.dataset.ts,sec=t-Math.floor(Date.now()/1000);el.textContent=sec<=0?"closing":"closes "+(sec>86400?Math.round(sec/86400)+"d":sec>3600?Math.round(sec/3600)+"h":Math.max(Math.round(sec/60),1)+"m");});
 }
 async function cancelWar(enemy){
-  if(!confirm("Cancel the war against "+enemy+"? It stops immediately and is marked done."))return;
+  if(!await confirmBox({icon:"🏳️",title:"Cancel war?",message:"The war against "+enemy+" stops immediately and is marked done.",confirmText:"Cancel war",danger:true}))return;
   try{const r=await post("/api/war_cancel",{guild:STATE.guild,enemy:enemy});toast("War cancelled","ok");STATE.wars=r.wars;render();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 async function closeEoi(id,name){
-  if(!confirm("Close voting for "+name+"'s application now? Votes are tallied and the post locks."))return;
+  if(!await confirmBox({icon:"🗳️",title:"Close voting?",message:"Close voting for "+name+"'s application now? Votes are tallied and the post locks.",confirmText:"Close voting"}))return;
   try{await post("/api/eoi_close",{guild:STATE.guild,msg_id:id});toast("Closed "+name+"'s EOI","ok");await reload();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 async function acceptEoi(id,name){
-  if(!confirm("Force-accept "+name+"? They'll be welcomed and given the member role regardless of the votes."))return;
+  if(!await confirmBox({icon:"✅",title:"Force-accept application?",message:"Force-accept "+name+"? They'll be welcomed and given the member role regardless of the votes.",confirmText:"Accept"}))return;
   try{await post("/api/eoi_accept",{guild:STATE.guild,msg_id:id});toast("Accepted "+name,"ok");await reload();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
@@ -5592,7 +5630,7 @@ function orderCard(o){
     <div class="oactions">${o.status==="open"?`<button class="${o.paid?"ghost":"brand-btn"}" onclick="markOrderPaid('${h(String(o.id))}',${o.paid?"false":"true"})">${o.paid?"Mark unpaid":"Mark paid"}</button><button class="danger" onclick="closeOrder('${h(String(o.id))}')">Force close</button>`:""}</div></div>`;
 }
 async function clearClosedOrders(n){
-  if(!confirm("Remove all "+n+" closed order(s) from the list? (The Discord channels are already gone; this just clears the history here.)"))return;
+  if(!await confirmBox({icon:"🧹",title:"Clear closed orders?",message:"Remove all "+n+" closed order(s) from the list. The Discord channels are already gone — this just clears the history here.",confirmText:"Clear"}))return;
   try{const r=await post("/api/orders_clear_closed",{guild:STATE.guild});toast("Cleared "+(r.removed||0)+" closed order(s)","ok");await reload();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
@@ -5608,7 +5646,7 @@ async function markOrderPaid(id,paid){
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 async function closeOrder(id){
-  if(!confirm("Force-close order #"+id+"? The ticket channel will be closed and a transcript saved."))return;
+  if(!await confirmBox({icon:"🔒",title:"Force-close order?",message:"Force-close order #"+id+"? The ticket channel will be closed and a transcript saved.",confirmText:"Force close",danger:true}))return;
   try{await post("/api/order_close",{guild:STATE.guild,order_id:id});toast("Order #"+id+" closed","ok");await reload();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
@@ -5620,7 +5658,7 @@ async function addTicketType(){
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
 async function removeTicketType(name){
-  if(!confirm('Remove order type "'+name+'"?'))return;
+  if(!await confirmBox({icon:"🗑️",title:"Remove order type?",message:'Remove the order type "'+name+'"?',confirmText:"Remove",danger:true}))return;
   try{const r=await post("/api/ticket_type_remove",{guild:STATE.guild,name});
     STATE.ticketTypes=r.types||[];toast("Removed order type","ok");render();const f=$("otypes");if(f)f.style.display="";}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
@@ -5717,13 +5755,13 @@ function subCardHTML(){
   return `<div class="card subcard"><div class="subhead"><div><h3 style="margin:0">💳 Subscription</h3><div class="muted" style="font-size:13px;margin-top:3px">${line}</div></div>${pill}</div>${acts?`<div class="subacts">${acts}</div>`:""}</div>`;
 }
 async function subAdmin(action){
-  if(action==="expire"&&!confirm("Expire this server's subscription now?"))return;
+  if(action==="expire"&&!await confirmBox({icon:"⚠️",title:"Expire subscription?",message:"Expire this server's subscription now? Paid features pause until it's renewed.",confirmText:"Expire",danger:true}))return;
   try{const r=await post("/api/sub_admin",{guild:STATE.guild,action:action});toast(r.message||"Done","ok");
     STATE.subs[STATE.guild]=r.subscription;STATE.settings=null;renderSubBanner();renderSettings();}
   catch(e){if(e.status===401)return boot();toast(e.message||"Failed","err");}
 }
 async function logsSetup(){
-  if(!confirm("Create a Logs category with a channel for every log type?"))return;
+  if(!await confirmBox({icon:"🗂️",title:"Create log channels?",message:"Create a Logs category with a channel for every log type?",confirmText:"Create"}))return;
   try{const r=await post("/api/logs_setup",{guild:STATE.guild});toast("Created "+r.created+" log channel(s)"+(r.kept?" (kept "+r.kept+")":""),"ok");STATE.settings=r.settings;renderSettings();}
   catch(e){if(e.status===401||e.status===403)return boot();toast(e.message||"Failed","err");}
 }
