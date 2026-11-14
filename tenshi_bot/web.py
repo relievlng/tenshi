@@ -31,6 +31,7 @@ from .billing import (
     effective_state,
     is_active,
     peek_active,
+    move_subscription,
     grant,
     expire,
     is_owner,
