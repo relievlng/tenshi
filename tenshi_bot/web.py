@@ -3914,6 +3914,15 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
 .rowline{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:13px 0;border-bottom:1px solid var(--line)}
 .rowline:last-child{border-bottom:0}
 .rowmain .nm{font-weight:600}.rowmain .mt{font-size:12px;color:var(--mute);margin-top:3px}
+.bcount{font-size:12.5px;color:var(--mute);margin:0 0 12px}.bcount b{color:var(--text)}
+.brow{display:flex;align-items:center;gap:13px;padding:14px 0;border-bottom:1px solid var(--line);animation:fadeUp .3s ease both}
+.brow:last-child{border-bottom:0}
+.bavwrap{position:relative;width:44px;height:44px;flex:none}.bavwrap>*{position:absolute;inset:0}
+.bav{width:44px;height:44px;border-radius:50%;object-fit:cover;background:#222;box-shadow:0 0 0 2px rgba(255,255,255,.08)}
+.binitial{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:17px;color:#fff;background:linear-gradient(135deg,#ef4444,#7f1d1d);box-shadow:0 0 0 2px rgba(239,68,68,.25)}
+.bmain{flex:1;min-width:0}.bname{font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bsub{font-size:12px;color:var(--mute);margin-top:3px}
+.breason{display:inline-block;margin-top:8px;font-size:12px;color:#ffc9c9;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);padding:3px 10px;border-radius:8px}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th{text-align:left;color:var(--mute);font-weight:600;padding:9px 10px;border-bottom:1px solid var(--line);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px}
 .tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -4006,6 +4015,8 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
   function fmtTs(t){if(!t)return '—';try{return new Date(t*1000).toLocaleString()}catch(e){return '—'}}
   function fmtIso(s){if(!s)return '—';try{return new Date(s).toLocaleString()}catch(e){return '—'}}
   function money(c,cur){if(!c)return '—';return (c/100).toFixed(2)+' '+(cur||'')}
+  function rel(ts){if(!ts)return '';var s=Math.floor(Date.now()/1000)-ts;if(s<60)return 'just now';var m=Math.floor(s/60);if(m<60)return m+'m ago';var h=Math.floor(m/60);if(h<24)return h+'h ago';var d=Math.floor(h/24);if(d<30)return d+'d ago';try{return new Date(ts*1000).toLocaleDateString()}catch(e){return ''}}
+  function initial(n){return (String(n||'?').trim()[0]||'?').toUpperCase()}
   function copyspan(v,cls){if(!v)return '<span class=mute>—</span>';return '<span class="'+(cls||'id')+' copy" data-copy="'+esc(v)+'" title="Click to copy">'+esc(v)+'</span>'}
   function idv(name,id){var n=name?esc(name)+' ':'';return id?(n+copyspan(id,'id')):(n||'<span class=mute>—</span>')}
   function animateNum(el,to){var from=0,st=performance.now();function tick(t){var k=Math.min(1,(t-st)/650);el.textContent=Math.round(from+(to-from)*(1-Math.pow(1-k,3))).toLocaleString();if(k<1)requestAnimationFrame(tick)}requestAnimationFrame(tick)}
@@ -4029,7 +4040,20 @@ input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,
   function subAction(b){var g=b.getAttribute('data-g'),a=b.getAttribute('data-a'),body,label;if(a==='add'){var d=parseInt(b.getAttribute('data-d'),10);body={guild_id:g,action:'add_days',days:d};label='Added '+d+' days';}else if(a==='life'){body={guild_id:g,action:'lifetime'};label='Lifetime granted';}else{if(!confirm('Revoke this server\'s subscription?'))return;body={guild_id:g,action:'revoke'};label='Revoked';}b.disabled=true;api('/api/admin/sub','POST',body).then(function(r){b.disabled=false;if(r.ok){toast(label);loadSubs()}else toast(r.error||'Failed',true)})}
   function customDays(){var g=$('#cdGuild').value.trim(),d=parseInt($('#cdDays').value,10);if(!g){toast('Enter a server ID',true);return}if(!d){toast('Enter days',true);return}api('/api/admin/sub','POST',{guild_id:g,action:'add_days',days:d}).then(function(r){if(r.ok){toast('Done');$('#cdDays').value='';loadSubs()}else toast(r.error||'Failed',true)})}
   function loadBans(){var box=$('#bansList');box.innerHTML='<div class=sk style=height:52px></div>';api('/api/admin/bans').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}BANS=d.bans||[];renderBans()})}
-  function renderBans(){var box=$('#bansList'),q=BANQ.toLowerCase();var list=BANS.filter(function(b){return !q||(String(b.id).indexOf(q)>=0||(b.name||'').toLowerCase().indexOf(q)>=0||(b.reason||'').toLowerCase().indexOf(q)>=0)});if(!list.length){box.innerHTML='<div class=pad>'+(BANS.length?'No bans match.':'No one is banned.')+'</div>';return}box.innerHTML=list.map(function(b){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(b.name||('ID '+b.id))+'</div><div class=mt>'+copyspan(b.id,'mono')+(b.reason?' · '+esc(b.reason):'')+' · '+fmtTs(b.ts)+'</div></div><button class="sm ghost" data-u="'+esc(b.id)+'">Unban</button></div>'}).join('');box.querySelectorAll('button[data-u]').forEach(function(x){x.onclick=function(){api('/api/admin/unban','POST',{user_id:x.getAttribute('data-u')}).then(function(r){if(r.ok){toast('Unbanned');loadBans();loadSubs()}else toast(r.error||'Failed',true)})}})}
+  function renderBans(){
+    var box=$('#bansList'),q=BANQ.toLowerCase();
+    var list=BANS.filter(function(b){return !q||(String(b.id).indexOf(q)>=0||(b.name||'').toLowerCase().indexOf(q)>=0||(b.reason||'').toLowerCase().indexOf(q)>=0)});
+    var cnt=BANS.length?('<div class=bcount><b>'+BANS.length+'</b> user'+(BANS.length!==1?'s':'')+' banned'+(q&&list.length!==BANS.length?(' · '+list.length+' shown'):'')+'</div>'):'';
+    if(!list.length){box.innerHTML=cnt+'<div class=pad>'+(BANS.length?'No bans match.':'No one is banned — nice and clean.')+'</div>';return}
+    box.innerHTML=cnt+list.map(function(b){
+      var av='<div class=bavwrap><div class=binitial>'+esc(initial(b.name))+'</div>'+(b.avatar?'<img class=bav src="'+esc(b.avatar)+'" alt="" onerror="this.style.display=\'none\'">':'')+'</div>';
+      return '<div class=brow>'+av+'<div class=bmain><div class=bname>'+esc(b.name||('ID '+b.id))+' <span class="badge red">Banned</span></div>'
+        +'<div class=bsub>'+copyspan(b.id,'mono')+' · '+rel(b.ts)+(b.by_name?(' · by '+esc(b.by_name)):'')+'</div>'
+        +(b.reason?'<div class=breason>“'+esc(b.reason)+'”</div>':'')
+        +'</div><button class="sm danger" data-u="'+esc(b.id)+'">Unban</button></div>';
+    }).join('');
+    box.querySelectorAll('button[data-u]').forEach(function(x){x.onclick=function(){if(!confirm('Unban this user?'))return;api('/api/admin/unban','POST',{user_id:x.getAttribute('data-u')}).then(function(r){if(r.ok){toast('Unbanned');loadBans();loadSubs()}else toast(r.error||'Failed',true)})}});
+  }
   function doBan(){var id=$('#banId').value.trim(),rs=$('#banReason').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/ban','POST',{user_id:id,reason:rs}).then(function(r){if(r.ok){toast('Banned');$('#banId').value='';$('#banReason').value='';loadBans();loadSubs()}else toast(r.error||'Failed',true)})}
   function loadShop(){var box=$('#shopList');box.innerHTML='<div class=sk style=height:40px></div><div class=sk style=height:40px></div>';api('/api/admin/shop_log').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}SHOP=d.log||[];renderShop()})}
   function shopFiltered(){var q=SHOPQ.toLowerCase();return SHOP.filter(function(e){return !q||((e.email||'').toLowerCase().indexOf(q)>=0||(e.ip||'').indexOf(q)>=0||(e.guild_name||'').toLowerCase().indexOf(q)>=0||String(e.guild_id||'').indexOf(q)>=0)})}
@@ -4171,7 +4195,22 @@ async def _h_admin_bans(request):
     uid, owner = _admin_ctx(request)
     if uid is None:
         return _admin_json({"ok": False, "error": "forbidden"}, 403)
-    bans = [{**b, "name": b.get("name") or _user_label(b.get("id"))} for b in list_bans()]
+    bans = []
+    for b in list_bans():
+        name = b.get("name") or ""
+        avatar = None
+        try:
+            u = bot.get_user(int(b.get("id")))
+            if u:
+                name = name or str(u)
+                avatar = u.display_avatar.url
+        except (TypeError, ValueError):
+            pass
+        by_name = ""
+        by = b.get("by")
+        if by:
+            by_name = _user_label(by) or (_cached_profile(by) or {}).get("name", "")
+        bans.append({**b, "name": name, "avatar": avatar, "by_name": by_name})
     return _admin_json({"ok": True, "bans": bans})
 
 
