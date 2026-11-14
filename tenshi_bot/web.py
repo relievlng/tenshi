@@ -3813,100 +3813,126 @@ async def _h_stats(request):
 _ADMIN_HTML = r"""<!doctype html><html lang=en><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Gang Manager — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0e0f13;--card:#171920;--card2:#1d2029;--bd:#272a33;--tx:#e7e9ee;--mut:#9aa0ad;--acc:#5865f2;--grn:#23a55a;--red:#da373c;--amb:#f0b232;--pur:#9b6cff}
+:root{--bg:#07070a;--card:rgba(20,20,26,.72);--cardsolid:#15151b;--line:rgba(255,255,255,.07);--text:#f2f2f6;--mute:#9a9aa8;--brand:#9a9aa8;--brand2:#c9c9d2;--ok:#22c55e;--bad:#ef4444;--warn:#f59e0b;--blue:#60a5fa;--purple:#a78bfa;--r:18px}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
-a{color:inherit}
-.top{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--bd);position:sticky;top:0;background:rgba(14,15,19,.9);backdrop-filter:blur(8px);z-index:5}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700}
-.brand .dot{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--acc),var(--pur));display:grid;place-items:center;font-size:14px}
-.brand .sub{font-weight:500;color:var(--mut);font-size:12px;margin-left:4px}
-.uchip{display:flex;align-items:center;gap:8px;font-size:14px}
-.uchip img{width:24px;height:24px;border-radius:50%;display:none}
-.ob{font-size:10px;font-weight:700;letter-spacing:.5px;color:#fff;background:linear-gradient(135deg,var(--acc),var(--pur));padding:2px 7px;border-radius:999px;display:none}
-.wrap{max-width:920px;margin:0 auto;padding:18px 16px 60px}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:6px 0 18px}
-.stat{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px}
-.stat .n{font-size:26px;font-weight:700}
-.stat .l{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
-.tabs{display:flex;gap:6px;border-bottom:1px solid var(--bd);margin-bottom:16px;flex-wrap:wrap}
-.tab{padding:9px 14px;cursor:pointer;color:var(--mut);font-weight:600;border-bottom:2px solid transparent;user-select:none}
-.tab.on{color:var(--tx);border-bottom-color:var(--acc)}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:14px}
-.card h3{margin:0 0 4px;font-size:15px}
-.card .hint{color:var(--mut);font-size:13px;margin:0 0 12px}
-.row{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 14px;border:1px solid var(--bd);border-radius:12px;background:var(--card);margin-bottom:8px;flex-wrap:wrap}
-.rname{font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.rmeta{color:var(--mut);font-size:12.5px;margin-top:3px}
-.racts{display:flex;gap:6px;flex-wrap:wrap}
-.btn{background:var(--card2);border:1px solid var(--bd);color:var(--tx);padding:8px 12px;border-radius:9px;cursor:pointer;font-weight:600;font-size:13px}
-.btn:hover{border-color:#39415a}
-.btn:disabled{opacity:.5;cursor:default}
-.btn.sm{padding:6px 10px;font-size:12.5px}
-.btn.pri{background:var(--acc);border-color:var(--acc)}
-.btn.pur{background:#2a2140;border-color:#4a3a78;color:#d9ccff}
-.btn.red{background:#2a1618;border-color:#5a2a2e;color:#ffb4b8}
-.b{font-size:10px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:999px}
-.b.grn{background:rgba(35,165,90,.15);color:#5ee29a;border:1px solid rgba(35,165,90,.3)}
-.b.red{background:rgba(218,55,60,.15);color:#ff8f93;border:1px solid rgba(218,55,60,.3)}
-.b.pur{background:rgba(155,108,255,.15);color:#c9b3ff;border:1px solid rgba(155,108,255,.3)}
-.b.gry{background:rgba(154,160,173,.12);color:var(--mut);border:1px solid var(--bd)}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--mut)}
-.mut{color:var(--mut)}
-.pad{padding:18px;text-align:center}
-.inp{background:var(--bg);border:1px solid var(--bd);color:var(--tx);padding:9px 12px;border-radius:9px;font-size:14px;width:100%}
-.frm{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-.frm .inp{flex:1;min-width:160px}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);min-height:100vh;font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:-20%;z-index:-1;pointer-events:none;background:radial-gradient(900px 520px at 12% -8%,rgba(255,255,255,.22),transparent 60%),radial-gradient(760px 520px at 102% 2%,rgba(130,20,70,.20),transparent 55%),radial-gradient(640px 640px at 50% 118%,rgba(60,10,36,.28),transparent 62%);animation:drift 20s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate3d(0,-14px,0) scale(1.04)}}
+a{text-decoration:none;color:inherit}
+::selection{background:rgba(255,255,255,.35)}
+header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(7,7,10,.92),rgba(7,7,10,.72));backdrop-filter:blur(12px)}
+.logo{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;overflow:hidden;background:#0d0d12;border:1px solid rgba(255,255,255,.4);box-shadow:0 0 22px rgba(255,255,255,.3)}
+.logo img{width:100%;height:100%;object-fit:cover;display:block}
+.brand{font-family:"Space Grotesk",sans-serif;font-size:19px;font-weight:700;letter-spacing:.5px;background:linear-gradient(90deg,#fff,#e8e8ee);-webkit-background-clip:text;background-clip:text;color:transparent;flex:1}
+.brand small{font-family:"Inter";font-weight:500;font-size:12px;color:var(--mute);letter-spacing:0;display:block;margin-top:-2px}
+.userchip{display:flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);font-size:13px;font-weight:600}
+.userchip img{width:28px;height:28px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.14);display:none}
+.opbadge{font-size:9.5px;font-weight:800;letter-spacing:.8px;padding:3px 7px;border-radius:6px;white-space:nowrap;background:linear-gradient(90deg,#c9c9d2,#fff);color:#111;display:none}
+.wrap{max-width:900px;margin:0 auto;padding:20px 18px 60px}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);padding:9px 14px;border-radius:11px;transition:.16s ease}
+button:hover{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.1);transform:translateY(-1px)}
+button:active{transform:translateY(0)}
+button:disabled{opacity:.5;cursor:default;transform:none}
+button.brand-btn{background:linear-gradient(135deg,var(--brand),#3a3a42);border-color:transparent;color:#fff;font-weight:700;box-shadow:0 8px 24px rgba(255,255,255,.1)}
+button.ghost{background:transparent}
+button.danger{border-color:rgba(239,68,68,.3);color:#ffb0b0;background:transparent}
+button.danger:hover{background:var(--bad);border-color:var(--bad);color:#fff}
+button.sm{padding:7px 11px;font-size:12.5px;border-radius:9px}
+button.pur{border-color:rgba(167,139,250,.35);color:#d4c6ff;background:rgba(167,139,250,.08)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:12px;margin:4px 0 20px}
+.stat{position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;backdrop-filter:blur(10px)}
+.stat .n{font-size:26px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.stat .l{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.tabs{display:inline-flex;gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);margin-bottom:16px;flex-wrap:wrap}
+.tab{padding:8px 18px;border-radius:10px;cursor:pointer;color:var(--mute);font-weight:600;transition:.18s;user-select:none}
+.tab.active{background:linear-gradient(135deg,var(--brand),#3a3a42);color:#fff;box-shadow:0 6px 18px rgba(255,255,255,.2)}
+.card{position:relative;background:rgba(14,14,20,.62);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px;backdrop-filter:blur(10px)}
+.card h3{margin:0 0 4px;font-size:15px;font-weight:700}
+.card .hint{color:var(--mute);font-size:13px;margin:0 0 14px}
+.srvhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.srvname{font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.srvname img{width:26px;height:26px;border-radius:8px}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.badge{font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.5px}
+.badge.live{background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.4)}
+.badge.pur{background:rgba(167,139,250,.15);color:#cdbcff;border:1px solid rgba(167,139,250,.4)}
+.badge.red{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.4)}
+.badge.off{background:rgba(255,255,255,.05);color:var(--mute);border:1px solid var(--line)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 22px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.kv{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kv .k{font-size:10.5px;color:var(--mute);text-transform:uppercase;letter-spacing:.6px}
+.kv .v{font-size:13.5px;font-weight:500;word-break:break-word}
+.kv .v .id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--mute)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--mute);word-break:break-all}
+.mute{color:var(--mute)}
+.pad{padding:22px;text-align:center;color:var(--mute)}
+input{font:inherit;padding:10px 13px;border-radius:11px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--text);width:100%}
+input:focus{outline:none;border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.06)}
+.frm{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.frm input{flex:1;min-width:150px}
+.rowline{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:13px 0;border-bottom:1px solid var(--line)}
+.rowline:last-child{border-bottom:0}
+.rowmain .nm{font-weight:600}
+.rowmain .mt{font-size:12px;color:var(--mute);margin-top:3px}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
-.tbl th{text-align:left;color:var(--mut);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--bd);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
-.tbl td{padding:9px 10px;border-bottom:1px solid var(--bd)}
-.mid{max-width:420px;margin:60px auto;text-align:center}
-.mid .big{font-size:40px}
-.mid h2{margin:10px 0 6px}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#222633;border:1px solid var(--bd);color:var(--tx);padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:.2s;font-weight:600;font-size:13.5px}
+.tbl th{text-align:left;color:var(--mute);font-weight:600;padding:9px 10px;border-bottom:1px solid var(--line);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px}
+.tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+.gate{min-height:70vh;display:grid;place-items:center}
+.gate .card{max-width:420px;text-align:center}
+.gate .big{font-size:42px}
+.gate h2{margin:12px 0 6px}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#1a1a22;border:1px solid var(--line);color:var(--text);padding:11px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.2s;font-weight:600;font-size:13.5px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.toast.bad{background:#2a1618;border-color:#5a2a2e;color:#ffb4b8}
-@media(max-width:560px){.stats{grid-template-columns:repeat(3,1fr);gap:8px}.stat{padding:11px}.stat .n{font-size:20px}}
+.toast.bad{border-color:rgba(239,68,68,.4);color:#ffb0b0}
 </style></head><body>
-<div class=top>
-  <div class=brand><span class=dot>GM</span>Gang Manager<span class=sub>Admin</span></div>
-  <div class=uchip id=uchip style=display:none><span class=ob id=ownerBadge>OWNER</span><img id=uav alt=""><span id=uname></span><a class="btn sm" href="/logout" style="margin-left:4px">Logout</a></div>
-</div>
-<div id=gate class=wrap></div>
+<header>
+  <div class="logo"><img src="/gm-logo.png" alt="Gang Manager" onerror="this.style.display='none'"></div>
+  <div class="brand">GANG MANAGER<small>Admin Control</small></div>
+  <div class="userchip" id=uchip style=display:none><img id=uav alt=""><span id=uname></span><span class=opbadge id=ownerBadge>OWNER</span></div>
+  <a href="/logout"><button class="ghost sm" style="margin-left:4px">Log out</button></a>
+</header>
+<div id=gate class="wrap gate"></div>
 <div id=app class=wrap style=display:none>
   <div class=stats>
     <div class=stat><div class=n id=statServers>0</div><div class=l>Servers</div></div>
-    <div class=stat><div class=n id=statActive>0</div><div class=l>Active subs</div></div>
+    <div class=stat><div class=n id=statActive>0</div><div class=l>Active</div></div>
+    <div class=stat><div class=n id=statLife>0</div><div class=l>Lifetime</div></div>
+    <div class=stat><div class=n id=statMembers>0</div><div class=l>Members</div></div>
     <div class=stat><div class=n id=statBans>0</div><div class=l>Banned</div></div>
+    <div class=stat><div class=n id=statStaff>0</div><div class=l>Staff</div></div>
   </div>
   <div class=tabs>
-    <div class=tab id=tab-subs>Subscriptions</div>
+    <div class="tab active" id=tab-subs>Subscriptions</div>
     <div class=tab id=tab-bans>Bans</div>
     <div class=tab id=tab-shop>Shop log</div>
     <div class=tab id=tab-staff>Staff access</div>
   </div>
   <div id=pan-subs>
-    <div class=card><h3>Add time to a server by ID</h3><p class=hint>Use this for a server the bot isn't in yet, or to adjust by a custom amount. Positive adds days, negative removes.</p>
-      <div class=frm><input class=inp id=cdGuild placeholder="Server (guild) ID"><input class=inp id=cdDays placeholder="Days (e.g. 30)" style="max-width:150px" inputmode=numeric><button class="btn pri" id=cdBtn>Apply</button></div>
+    <div class=card><h3>Add time by server ID</h3><p class=hint>For a server the bot isn't in yet, or a custom amount. Positive adds days, negative removes.</p>
+      <div class=frm><input id=cdGuild placeholder="Server (guild) ID"><input id=cdDays placeholder="Days (e.g. 30)" style="max-width:150px" inputmode=numeric><button class="brand-btn" id=cdBtn>Apply</button></div>
     </div>
     <div id=subsList></div>
   </div>
   <div id=pan-bans style=display:none>
-    <div class=card><h3>Ban a Discord user</h3><p class=hint>A ban is global — the bot ignores them in every server: no commands, no tickets, nothing.</p>
-      <div class=frm><input class=inp id=banId placeholder="Discord user ID"><input class=inp id=banReason placeholder="Reason (optional)"><button class="btn red" id=banBtn>Ban</button></div>
+    <div class=card><h3>Ban a Discord user</h3><p class=hint>A ban is global — the bot ignores them in every server: no commands, buttons, tickets or menus.</p>
+      <div class=frm><input id=banId placeholder="Discord user ID"><input id=banReason placeholder="Reason (optional)"><button class="danger" id=banBtn>Ban</button></div>
     </div>
-    <div id=bansList></div>
+    <div class=card><div id=bansList></div></div>
   </div>
   <div id=pan-shop style=display:none>
-    <div class=card><h3>Shop log</h3><p class=hint>Every purchase, with the email and IP captured at checkout.</p><div id=shopList></div></div>
+    <div class=card><h3>Shop log</h3><p class=hint>Every purchase, with the email and the IP captured at checkout.</p><div id=shopList></div></div>
   </div>
   <div id=pan-staff style=display:none>
     <div class=card><h3>Authorised staff</h3><p class=hint>Staff you authorise here can open this admin site and manage subs, bans and the shop log. Only you (owner) can add or remove them.</p>
-      <div class=frm id=staffForm style=display:none><input class=inp id=staffId placeholder="Discord user ID to authorise"><button class="btn pri" id=staffBtn>Authorise</button></div>
+      <div class=frm id=staffForm style=display:none><input id=staffId placeholder="Discord user ID to authorise"><button class="brand-btn" id=staffBtn>Authorise</button></div>
       <p class=hint id=staffOwnerNote style=display:none>Only the bot owner can change who has access.</p>
     </div>
-    <div id=staffList></div>
+    <div class=card><div id=staffList></div></div>
   </div>
 </div>
 <div class=toast id=toast></div>
@@ -3914,8 +3940,11 @@ a{color:inherit}
 (function(){
   var $=function(s){return document.querySelector(s)};
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function nf(n){try{return Number(n).toLocaleString()}catch(e){return n}}
   function fmtTs(t){if(!t)return '—';try{return new Date(t*1000).toLocaleString()}catch(e){return '—'}}
+  function fmtIso(s){if(!s)return '—';try{return new Date(s).toLocaleString()}catch(e){return '—'}}
   function money(c,cur){if(!c)return '—';return (c/100).toFixed(2)+' '+(cur||'')}
+  function idv(name,id){var n=name?esc(name)+' ':'';return n+(id?'<span class=id>'+esc(id)+'</span>':'<span class=mute>—</span>')}
   var STATE={owner:false};
   function api(path,method,body){
     var ctrl=new AbortController();var to=setTimeout(function(){ctrl.abort()},12000);
@@ -3939,38 +3968,52 @@ a{color:inherit}
   }
   function showGate(kind){
     $('#app').style.display='none';var g=$('#gate');g.style.display='';
-    if(kind==='login')g.innerHTML='<div class="card mid"><div class=big>🔐</div><h2>Admin sign-in</h2><p class=mut>Log in with a Discord account that owns or is authorised for the bot.</p><a class="btn pri" href="/login?next=/admin">Log in with Discord</a></div>';
-    else if(kind==='denied')g.innerHTML='<div class="card mid"><div class=big>⛔</div><h2>Not authorised</h2><p class=mut>This account isn\'t on the admin list. Ask the owner to authorise your Discord ID.</p><a class=btn href="/logout">Switch account</a></div>';
-    else g.innerHTML='<div class="card mid"><div class=big>⚠️</div><h2>Couldn\'t load</h2><p class=mut>Something went wrong. Refresh to try again.</p><a class=btn href="/admin">Refresh</a></div>';
+    if(kind==='login')g.innerHTML='<div class=card><div class=big>🔐</div><h2>Admin sign-in</h2><p class=mute>Log in with a Discord account that owns or is authorised for the bot.</p><a href="/login?next=/admin"><button class="brand-btn" style="margin-top:12px">Log in with Discord</button></a></div>';
+    else if(kind==='denied')g.innerHTML='<div class=card><div class=big>⛔</div><h2>Not authorised</h2><p class=mute>This account isn\'t on the admin list. Ask the owner to authorise your Discord ID.</p><a href="/logout"><button class="ghost" style="margin-top:12px">Switch account</button></a></div>';
+    else g.innerHTML='<div class=card><div class=big>⚠️</div><h2>Couldn\'t load</h2><p class=mute>Something went wrong. Refresh to try again.</p><a href="/admin"><button class="ghost" style="margin-top:12px">Refresh</button></a></div>';
   }
   function selectTab(id){
     ['subs','bans','shop','staff'].forEach(function(t){
       var on=t===id,tab=$('#tab-'+t),pan=$('#pan-'+t);
-      if(tab)tab.classList.toggle('on',on);if(pan)pan.style.display=on?'':'none';
+      if(tab)tab.classList.toggle('active',on);if(pan)pan.style.display=on?'':'none';
     });
     if(id==='subs')loadSubs();if(id==='bans')loadBans();if(id==='shop')loadShop();if(id==='staff')loadStaff();
   }
-  function loadOverview(){api('/api/admin/overview').then(function(d){if(!d.ok)return;var c=d.counts||{};$('#statServers').textContent=c.servers||0;$('#statActive').textContent=c.active||0;$('#statBans').textContent=c.bans||0})}
-  function badge(s){if(s.mode==='lifetime'||s.lifetime)return '<span class="b pur">LIFETIME</span>';if(s.active)return '<span class="b grn">ACTIVE</span>';if(s.status==='expired')return '<span class="b red">EXPIRED</span>';return '<span class="b gry">NONE</span>'}
+  function loadOverview(){api('/api/admin/overview').then(function(d){if(!d.ok)return;var c=d.counts||{};$('#statServers').textContent=nf(c.servers||0);$('#statActive').textContent=nf(c.active||0);$('#statLife').textContent=nf(c.lifetime||0);$('#statMembers').textContent=nf(c.members||0);$('#statBans').textContent=nf(c.bans||0);$('#statStaff').textContent=nf(c.staff||0)})}
+  function badge(s){if(s.mode==='lifetime'||s.lifetime)return '<span class="badge pur">Lifetime</span>';if(s.active)return '<span class="badge live">Active</span>';if(s.status==='expired')return '<span class="badge red">Expired</span>';return '<span class="badge off">None</span>'}
+  function expiry(s){if(s.lifetime)return 'Never (lifetime)';if(s.active&&s.days_left!=null)return s.days_left+' days left'+(s.expires_at?' · '+fmtIso(s.expires_at):'');if(s.expires_at)return fmtIso(s.expires_at);return '—'}
   function loadSubs(){
-    var box=$('#subsList');box.innerHTML='<div class="mut pad">Loading…</div>';
+    var box=$('#subsList');box.innerHTML='<div class=pad>Loading…</div>';
     api('/api/admin/overview').then(function(d){
-      if(!d.ok){box.innerHTML='<div class="mut pad">Could not load.</div>';return}
-      if(!d.servers.length){box.innerHTML='<div class="mut pad">The bot isn\'t in any servers yet.</div>';return}
+      if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}
+      if(!d.servers.length){box.innerHTML='<div class=pad>The bot isn\'t in any servers yet.</div>';return}
       box.innerHTML=d.servers.map(function(s){
-        var sub=s.lifetime?'Lifetime':(s.active?(s.days_left!=null?s.days_left+' days left':'active'):(s.status||'none'));
-        return '<div class=row><div class=rmain><div class=rname>'+esc(s.name)+' '+badge(s)+'</div>'
-          +'<div class=rmeta>'+Number(s.members).toLocaleString()+' members · '+esc(sub)+' · <span class=mono>'+esc(s.id)+'</span></div></div>'
-          +'<div class=racts>'
-          +'<button class="btn sm" data-g="'+s.id+'" data-a=add data-d=7>+7d</button>'
-          +'<button class="btn sm" data-g="'+s.id+'" data-a=add data-d=30>+30d</button>'
-          +'<button class="btn sm pur" data-g="'+s.id+'" data-a=life>♾ Lifetime</button>'
-          +'<button class="btn sm red" data-g="'+s.id+'" data-a=rev>Revoke</button>'
+        var ic=s.icon?'<img src="'+esc(s.icon)+'" alt="">':'';
+        return '<div class=card>'
+          +'<div class=srvhead><div class=srvname>'+ic+esc(s.name)+' '+badge(s)+'</div>'
+          +'<div class=acts>'
+          +'<button class="sm" data-g="'+s.id+'" data-a=add data-d=7>+7d</button>'
+          +'<button class="sm" data-g="'+s.id+'" data-a=add data-d=30>+30d</button>'
+          +'<button class="sm pur" data-g="'+s.id+'" data-a=life>♾ Lifetime</button>'
+          +'<button class="sm danger" data-g="'+s.id+'" data-a=rev>Revoke</button>'
+          +'</div></div>'
+          +'<div class=grid>'
+          +kv('Members',nf(s.members))
+          +kv('Plan',esc(s.plan||'—'))
+          +kv('Expires',esc(expiry(s)))
+          +kv('Server owner',idv(s.owner_name,s.owner_id))
+          +kv('Purchased by',idv(s.purchaser_name,s.purchaser_id))
+          +kv('Server ID','<span class=id>'+esc(s.id)+'</span>')
+          +kv('Stripe customer','<span class=id>'+esc(s.customer_id||'—')+'</span>')
+          +kv('Stripe sub','<span class=id>'+esc(s.sub_id||'—')+'</span>')
+          +kv('Server created',fmtTs(s.created_at))
+          +kv('Sub updated',fmtIso(s.updated_at))
           +'</div></div>';
       }).join('');
       box.querySelectorAll('button[data-a]').forEach(function(b){b.onclick=function(){subAction(b)}});
     });
   }
+  function kv(k,v){return '<div class=kv><span class=k>'+k+'</span><span class=v>'+v+'</span></div>'}
   function subAction(b){
     var g=b.getAttribute('data-g'),a=b.getAttribute('data-a'),body,label;
     if(a==='add'){var d=parseInt(b.getAttribute('data-d'),10);body={guild_id:g,action:'add_days',days:d};label='Added '+d+' days';}
@@ -3980,10 +4023,10 @@ a{color:inherit}
     api('/api/admin/sub','POST',body).then(function(r){b.disabled=false;if(r.ok){toast(label+' ✓');loadSubs();loadOverview()}else toast(r.error||'Failed',true)});
   }
   function customDays(){var g=$('#cdGuild').value.trim(),d=parseInt($('#cdDays').value,10);if(!g){toast('Enter a server ID',true);return}if(!d){toast('Enter days',true);return}api('/api/admin/sub','POST',{guild_id:g,action:'add_days',days:d}).then(function(r){if(r.ok){toast('Done ✓');$('#cdDays').value='';loadSubs();loadOverview()}else toast(r.error||'Failed',true)})}
-  function loadBans(){var box=$('#bansList');box.innerHTML='<div class="mut pad">Loading…</div>';api('/api/admin/bans').then(function(d){if(!d.ok){box.innerHTML='<div class="mut pad">Could not load.</div>';return}if(!d.bans.length){box.innerHTML='<div class="mut pad">No one is banned.</div>';return}box.innerHTML=d.bans.map(function(b){return '<div class=row><div class=rmain><div class=rname>'+esc(b.name||('ID '+b.id))+'</div><div class=rmeta><span class=mono>'+esc(b.id)+'</span>'+(b.reason?' · '+esc(b.reason):'')+' · '+fmtTs(b.ts)+'</div></div><div class=racts><button class="btn sm" data-u="'+esc(b.id)+'">Unban</button></div></div>'}).join('');box.querySelectorAll('button[data-u]').forEach(function(x){x.onclick=function(){api('/api/admin/unban','POST',{user_id:x.getAttribute('data-u')}).then(function(r){if(r.ok){toast('Unbanned ✓');loadBans();loadOverview()}else toast(r.error||'Failed',true)})}})})}
+  function loadBans(){var box=$('#bansList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/bans').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}if(!d.bans.length){box.innerHTML='<div class=pad>No one is banned.</div>';return}box.innerHTML=d.bans.map(function(b){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(b.name||('ID '+b.id))+'</div><div class=mt><span class=mono>'+esc(b.id)+'</span>'+(b.reason?' · '+esc(b.reason):'')+' · '+fmtTs(b.ts)+'</div></div><button class="sm ghost" data-u="'+esc(b.id)+'">Unban</button></div>'}).join('');box.querySelectorAll('button[data-u]').forEach(function(x){x.onclick=function(){api('/api/admin/unban','POST',{user_id:x.getAttribute('data-u')}).then(function(r){if(r.ok){toast('Unbanned ✓');loadBans();loadOverview()}else toast(r.error||'Failed',true)})}})})}
   function doBan(){var id=$('#banId').value.trim(),rs=$('#banReason').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/ban','POST',{user_id:id,reason:rs}).then(function(r){if(r.ok){toast('Banned ✓');$('#banId').value='';$('#banReason').value='';loadBans();loadOverview()}else toast(r.error||'Failed',true)})}
-  function loadShop(){var box=$('#shopList');box.innerHTML='<div class="mut pad">Loading…</div>';api('/api/admin/shop_log').then(function(d){if(!d.ok){box.innerHTML='<div class="mut pad">Could not load.</div>';return}if(!d.log.length){box.innerHTML='<div class="mut pad">No purchases logged yet — they show here after the next sale.</div>';return}box.innerHTML='<table class=tbl><thead><tr><th>When</th><th>Type</th><th>Email</th><th>IP</th><th>Amount</th><th>Server</th></tr></thead><tbody>'+d.log.map(function(e){return '<tr><td>'+fmtTs(e.ts)+'</td><td>'+esc(e.kind||'')+'</td><td class=mono>'+esc(e.email||'—')+'</td><td class=mono>'+esc(e.ip||'—')+'</td><td>'+money(e.amount,e.currency)+'</td><td>'+esc(e.guild_name||e.guild_id||'')+'</td></tr>'}).join('')+'</tbody></table>'})}
-  function loadStaff(){var box=$('#staffList');box.innerHTML='<div class="mut pad">Loading…</div>';api('/api/admin/staff').then(function(d){if(!d.ok){box.innerHTML='<div class="mut pad">Could not load.</div>';return}var canEdit=!!d.owner;$('#staffForm').style.display=canEdit?'':'none';$('#staffOwnerNote').style.display=canEdit?'none':'';if(!d.staff.length){box.innerHTML='<div class="mut pad">No extra staff authorised — just you.</div>';return}box.innerHTML=d.staff.map(function(s){return '<div class=row><div class=rmain><div class=rname>'+esc(s.name||('ID '+s.id))+'</div><div class=rmeta><span class=mono>'+esc(s.id)+'</span> · added '+fmtTs(s.ts)+'</div></div><div class=racts>'+(canEdit?'<button class="btn sm red" data-s="'+esc(s.id)+'">Remove</button>':'')+'</div></div>'}).join('');if(canEdit)box.querySelectorAll('button[data-s]').forEach(function(x){x.onclick=function(){api('/api/admin/staff_remove','POST',{user_id:x.getAttribute('data-s')}).then(function(r){if(r.ok){toast('Removed ✓');loadStaff()}else toast(r.error||'Failed',true)})}})})}
+  function loadShop(){var box=$('#shopList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/shop_log').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}if(!d.log.length){box.innerHTML='<div class=pad>No purchases logged yet — they show here after the next sale.</div>';return}box.innerHTML='<table class=tbl><thead><tr><th>When</th><th>Type</th><th>Email</th><th>IP</th><th>Amount</th><th>Server</th></tr></thead><tbody>'+d.log.map(function(e){return '<tr><td>'+fmtTs(e.ts)+'</td><td>'+esc(e.kind||'')+'</td><td class=mono>'+esc(e.email||'—')+'</td><td class=mono>'+esc(e.ip||'—')+'</td><td>'+money(e.amount,e.currency)+'</td><td>'+esc(e.guild_name||e.guild_id||'')+'</td></tr>'}).join('')+'</tbody></table>'})}
+  function loadStaff(){var box=$('#staffList');box.innerHTML='<div class=pad>Loading…</div>';api('/api/admin/staff').then(function(d){if(!d.ok){box.innerHTML='<div class=pad>Could not load.</div>';return}var canEdit=!!d.owner;$('#staffForm').style.display=canEdit?'':'none';$('#staffOwnerNote').style.display=canEdit?'none':'';if(!d.staff.length){box.innerHTML='<div class=pad>No extra staff authorised — just you.</div>';return}box.innerHTML=d.staff.map(function(s){return '<div class=rowline><div class=rowmain><div class=nm>'+esc(s.name||('ID '+s.id))+'</div><div class=mt><span class=mono>'+esc(s.id)+'</span> · added '+fmtTs(s.ts)+'</div></div>'+(canEdit?'<button class="sm danger" data-s="'+esc(s.id)+'">Remove</button>':'')+'</div>'}).join('');if(canEdit)box.querySelectorAll('button[data-s]').forEach(function(x){x.onclick=function(){api('/api/admin/staff_remove','POST',{user_id:x.getAttribute('data-s')}).then(function(r){if(r.ok){toast('Removed ✓');loadStaff()}else toast(r.error||'Failed',true)})}})})}
   function addStaff(){var id=$('#staffId').value.trim();if(!id){toast('Enter a Discord ID',true);return}api('/api/admin/staff_add','POST',{user_id:id}).then(function(r){if(r.ok){toast('Authorised ✓');$('#staffId').value='';loadStaff()}else toast(r.error||'Failed',true)})}
   document.addEventListener('click',function(e){var t=e.target;if(t.id==='tab-subs')selectTab('subs');if(t.id==='tab-bans')selectTab('bans');if(t.id==='tab-shop')selectTab('shop');if(t.id==='tab-staff')selectTab('staff');if(t.id==='banBtn')doBan();if(t.id==='staffBtn')addStaff();if(t.id==='cdBtn')customDays()});
   boot();
@@ -4034,22 +4077,37 @@ async def _h_admin_overview(request):
     if uid is None:
         return _admin_json({"ok": False, "error": "forbidden"}, 403)
     servers = []
-    active = 0
+    active = lifetime = total_members = 0
     for g in sorted(bot.guilds, key=lambda x: (x.member_count or 0), reverse=True):
         st = effective_state(g.id)
+        sub = guild_store(DATA, g.id).get("subscription") or {}
         if st.get("active"):
             active += 1
+        if st.get("lifetime"):
+            lifetime += 1
+        total_members += g.member_count or 0
+        owner_id = getattr(g, "owner_id", None)
+        owner_m = g.get_member(owner_id) if owner_id else None
+        owner_name = (str(owner_m) if owner_m else _user_label(owner_id)) if owner_id else ""
+        pid = sub.get("purchaser_id") or ""
         servers.append({
             "id": str(g.id), "name": g.name, "members": g.member_count or 0,
             "icon": (g.icon.url if g.icon else None),
             "mode": st.get("mode"), "active": bool(st.get("active")),
             "status": st.get("status"), "lifetime": bool(st.get("lifetime")),
             "days_left": st.get("days_left"), "expires_at": st.get("expires_at"),
+            "plan": st.get("plan") or sub.get("plan") or "",
             "customer_id": st.get("customer_id") or "", "sub_id": st.get("sub_id") or "",
+            "owner_id": str(owner_id or ""), "owner_name": owner_name,
+            "owner_av": (owner_m.display_avatar.url if owner_m else None),
+            "purchaser_id": str(pid), "purchaser_name": (_user_label(pid) if pid else ""),
+            "updated_at": sub.get("updated_at"),
+            "created_at": int(g.created_at.timestamp()) if getattr(g, "created_at", None) else None,
         })
     return _admin_json({"ok": True, "owner": owner, "servers": servers,
                         "counts": {"servers": len(servers), "active": active,
-                                   "bans": len(list_bans())}})
+                                   "lifetime": lifetime, "members": total_members,
+                                   "bans": len(list_bans()), "staff": len(list_admin_staff())}})
 
 
 async def _h_admin_sub(request):
