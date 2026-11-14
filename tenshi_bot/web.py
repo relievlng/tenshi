@@ -3336,20 +3336,177 @@ async def _h_sub_move(request):
     )
 
 
+# A celebratory post-checkout page. It drives itself from /api/sub_check:
+# waits for the webhook to activate the sub, reveals "Add the bot" (opens the
+# Discord invite in a NEW tab so this page stays alive), then auto-advances to
+# the panel the moment the bot actually joins the server. __GID__ (validated
+# digits) and __BRAND__ (html-escaped) are substituted at serve time.
+_SUCCESS_HTML = r"""<style>
+:root{color-scheme:dark}*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;color:#ececf1;overflow:hidden;
+ font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+ background:radial-gradient(1100px 560px at 15% -10%,#2a2a33 0%,transparent 60%),
+ radial-gradient(900px 520px at 110% 115%,#3b3b46 0%,transparent 55%),#060608}
+canvas#cf{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.card{position:relative;z-index:1;width:100%;max-width:480px;text-align:center;padding:34px 30px 28px;
+ border-radius:26px;background:rgba(16,16,22,.76);border:1px solid rgba(255,255,255,.12);
+ backdrop-filter:blur(12px);box-shadow:0 36px 100px rgba(0,0,0,.6);animation:in .5s cubic-bezier(.2,.7,.2,1)}
+@keyframes in{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:none}}
+.logo{width:92px;height:56px;object-fit:contain;filter:drop-shadow(0 0 26px rgba(255,255,255,.22))}
+.check{width:74px;height:74px;margin:14px auto 2px;border-radius:50%;display:grid;place-items:center;
+ background:radial-gradient(circle at 50% 35%,rgba(74,222,128,.28),rgba(74,222,128,.06));
+ border:1px solid rgba(74,222,128,.45);box-shadow:0 0 40px rgba(74,222,128,.25)}
+.check svg{width:38px;height:38px}
+.check path{stroke:#4ade80;stroke-width:5;fill:none;stroke-linecap:round;stroke-linejoin:round;
+ stroke-dasharray:48;stroke-dashoffset:48;animation:draw .55s .25s forwards cubic-bezier(.6,.2,.2,1)}
+@keyframes draw{to{stroke-dashoffset:0}}
+h1{font-size:24px;margin:10px 0 6px;letter-spacing:-.4px}
+.sub{color:#a7a7b2;line-height:1.6;margin:0 0 20px;font-size:15px}
+.steps{display:flex;gap:6px;justify-content:center;margin:0 0 6px}
+.step{flex:1;max-width:116px;display:flex;flex-direction:column;align-items:center;gap:7px;opacity:.4;transition:.35s}
+.step.on,.step.done{opacity:1}
+.dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:800;
+ background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);color:#cfcfd6;transition:.35s}
+.step.on .dot{border-color:#fff;background:rgba(255,255,255,.14);color:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.06)}
+.step.done .dot{background:linear-gradient(135deg,#4ade80,#22c55e);border-color:transparent;color:#06240f}
+.step .lbl{font-size:11px;font-weight:600;color:#c3c3cc;letter-spacing:.2px}
+.rail{position:relative;height:2px;background:rgba(255,255,255,.1);margin:4px 16% 22px;border-radius:2px}
+.rail i{position:absolute;top:0;bottom:0;left:0;right:100%;background:linear-gradient(90deg,#4ade80,#22c55e);
+ border-radius:2px;transition:right .55s cubic-bezier(.2,.7,.2,1)}
+.row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+a.b{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:13px;font-weight:700;
+ text-decoration:none;font-size:14.5px;border:1px solid rgba(255,255,255,.16);color:#fff;
+ background:rgba(255,255,255,.06);transition:.2s}
+a.b.p{background:linear-gradient(90deg,#c9c9d2,#fff);color:#09090c;border:none}
+a.b.g{background:linear-gradient(90deg,#4ade80,#22c55e);color:#06240f;border:none;box-shadow:0 10px 30px rgba(34,197,94,.3)}
+a.b.wait{opacity:.5;pointer-events:none}
+a.b.pulse{animation:pulse 1.8s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 10px 30px rgba(34,197,94,.3)}50%{box-shadow:0 10px 46px rgba(34,197,94,.58)}}
+.stat{margin:15px 0 0;font-size:12.5px;color:#8f8f99;min-height:16px}
+.stat b{color:#4ade80;font-weight:700}
+.hint{font-size:11.5px;color:#73737d;margin-top:4px;min-height:14px}
+.foot{margin-top:18px;font-size:11px;color:#6a6a74;letter-spacing:.3px}
+.spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;
+ border-radius:50%;animation:sp .7s linear infinite;vertical-align:-1px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style></head>
+<body>
+<canvas id=cf></canvas>
+<div class=card>
+ <img class=logo src='/gm-logo.png' alt='Gang Manager'>
+ <div class=check><svg viewBox='0 0 52 52'><path d='M14 27 l8 8 l16 -18'/></svg></div>
+ <h1>You're subscribed 🎉</h1>
+ <p class=sub id=lead>__BRAND__ is activating. One quick step left — add the bot to your server.</p>
+ <div class=steps>
+  <div class=step id=st0><div class=dot>1</div><div class=lbl>Payment</div></div>
+  <div class=step id=st1><div class=dot>2</div><div class=lbl>Add bot</div></div>
+  <div class=step id=st2><div class=dot>3</div><div class=lbl>Ready</div></div>
+ </div>
+ <div class=rail><i id=rail></i></div>
+ <div class=row><a class='b p wait' id=go href='#'><span class=spin></span>Confirming payment…</a></div>
+ <div class=stat id=stat aria-live=polite>Checking your payment with Stripe…</div>
+ <div class=hint id=hint></div>
+ <div class=row style='margin-top:14px'><a class='b' id=panel href='/panel'>Skip to the panel</a></div>
+ <div class=foot>Gang Manager · made by pmxl</div>
+</div>
+<script>
+(function(){
+ var g='__GID__';
+ var go=document.getElementById('go'),stat=document.getElementById('stat'),hint=document.getElementById('hint'),
+     lead=document.getElementById('lead'),rail=document.getElementById('rail'),
+     st0=document.getElementById('st0'),st1=document.getElementById('st1'),st2=document.getElementById('st2');
+ var RM=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+ var phase=-1,redirecting=false;
+ function setPhase(p){
+   if(p<=phase)return;phase=p;
+   if(p>=0)st0.className='step done';
+   if(p>=1){st1.className='step on';rail.style.right='50%';}
+   if(p>=2){st1.className='step done';st2.className='step done';rail.style.right='0%';}
+ }
+ function waiting(){
+   setPhase(0);
+   go.className='b p wait';go.innerHTML='<span class=spin></span>Confirming payment…';go.href='#';
+   stat.innerHTML='Checking your payment with Stripe…';hint.textContent='';
+ }
+ function readyToAdd(){
+   setPhase(1);
+   go.className='b g pulse';go.innerHTML='➕ Add __BRAND__';go.href='/invite?guild='+g;
+   go.target='_blank';go.rel='noopener';
+   stat.innerHTML='Subscription <b>active</b> ✓';
+   hint.textContent='Opens Discord in a new tab — this page moves on the moment the bot joins.';
+ }
+ function done(){
+   if(redirecting)return;redirecting=true;
+   setPhase(2);
+   go.className='b g';go.innerHTML='✓ Bot added';go.removeAttribute('target');go.href='/panel';
+   lead.textContent="You're all set. Opening your panel…";
+   stat.innerHTML='<b>All set!</b> Taking you to your dashboard…';hint.textContent='';
+   burst(180);
+   setTimeout(function(){location.href='/panel';},1400);
+ }
+ function tick(){
+   if(redirecting)return;
+   fetch('/api/sub_check?guild='+g).then(function(r){return r.json();}).then(function(d){
+     if(d.active&&d.bot_in){done();return;}
+     if(d.active)readyToAdd();else waiting();
+     setTimeout(tick,d.active?3000:2500);
+   }).catch(function(){setTimeout(tick,4000);});
+ }
+ if(!/^[0-9]+$/.test(g)){
+   setPhase(0);go.className='b p';go.innerHTML='Open the panel';go.href='/panel';
+   stat.textContent='';hint.textContent='';
+   var sw=document.querySelector('.steps'),rw=document.querySelector('.rail');
+   if(sw)sw.style.display='none';if(rw)rw.style.display='none';
+ }else{tick();}
+
+ // lightweight one-shot confetti
+ var cv=document.getElementById('cf'),cx=cv.getContext('2d'),W,H,parts=[],raf=0,until=0;
+ function size(){W=cv.width=innerWidth;H=cv.height=innerHeight;}
+ size();addEventListener('resize',size);
+ var COL=['#4ade80','#22c55e','#ffffff','#c9c9d2','#8b5cf6','#f59e0b'];
+ function burst(n){
+   if(RM)return;n=n||160;
+   for(var i=0;i<n;i++)parts.push({x:W/2+(Math.random()-.5)*140,y:H*0.32,
+     vx:(Math.random()-.5)*9,vy:-Math.random()*11-3,gr:.26+Math.random()*.14,
+     s:5+Math.random()*6,r:Math.random()*6.28,vr:(Math.random()-.5)*.3,
+     c:COL[(Math.random()*COL.length)|0]});
+   until=Date.now()+2600;if(!raf)raf=requestAnimationFrame(loop);
+ }
+ function loop(){
+   cx.clearRect(0,0,W,H);
+   for(var i=parts.length-1;i>=0;i--){var p=parts[i];
+     p.vy+=p.gr;p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;p.vx*=.99;
+     if(p.y>H+30||p.x<-30||p.x>W+30){parts.splice(i,1);continue;}
+     cx.save();cx.translate(p.x,p.y);cx.rotate(p.r);cx.fillStyle=p.c;
+     cx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.6);cx.restore();}
+   if(parts.length||Date.now()<until)raf=requestAnimationFrame(loop);else{raf=0;cx.clearRect(0,0,W,H);}
+ }
+ setTimeout(function(){burst(170);},350);
+})();
+</script>
+</body></html>"""
+
+
+def _billing_success_page(gid: str, brand: dict, status: int = 200):
+    """Celebratory post-checkout page (see _SUCCESS_HTML). gid must already be
+    validated digits or empty; brand name is escaped for both HTML and the JS
+    string literals it lands in."""
+    name = (html.escape(brand.get("name") or "Gang Manager") or "Gang Manager").replace("\\", "")
+    head = (
+        "<!doctype html><html lang=en><head><meta charset=utf-8>"
+        "<meta name=viewport content='width=device-width,initial-scale=1'>"
+        "<title>You're subscribed · Gang Manager</title>"
+        + _head_meta(web_base_url(), "You're subscribed · Gang Manager", _SITE_DESC)
+    )
+    body = _SUCCESS_HTML.replace("__GID__", gid).replace("__BRAND__", name)
+    return _aioweb.Response(text=head + body, status=status, content_type="text/html")
+
+
 async def _h_billing_success(request):
     gid = (request.query.get("guild") or "").strip()
-    if gid.isdigit() and bot.get_guild(int(gid)) is None:
-        # subscribed before adding the bot: next step is adding it
-        return _simple_page(
-            "✅", "You're subscribed!",
-            "Confirming your payment with Stripe — then add Gang Manager to your server.",
-            _await_active_actions(gid),
-        )
-    return _simple_page(
-        "✅", "You're subscribed!", "Activation lands in a few seconds — taking you to your panel…",
-        "<a class='b p' href='/panel'>Open the panel</a>"
-        "<script>setTimeout(function(){location.href='/panel'},3500)</script>",
-    )
+    if not gid.isdigit():
+        gid = ""  # no server context — page shows a plain "open the panel"
+    return _billing_success_page(gid, _brand_info())
 
 
 def _stripe_sig_ok(payload: bytes, header: str, secret: str) -> bool:
